@@ -4,7 +4,7 @@
 $version = "1.0-beta.1"
 $ProgramName = "MS365-PSToolkit"
 ########################################
-$tempdir = "C:\INSTALL\$ProgramName-$version"
+$tempdir = "C:\INSTALL\$ProgramName"
 #######################################
 #######################################
 # Fixed Variables
@@ -12,6 +12,7 @@ $tempdir = "C:\INSTALL\$ProgramName-$version"
 $error.clear()
 $ProgressPreference = 'SilentlyContinue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
+$curDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
 #######################################
 
 
@@ -26,6 +27,16 @@ function Logo {
     write-Host "v$version" -ForegroundColor Blue
 }
 
+function saveCSV {
+    Write-Host "Save output to CSV ?  (Y/N)" -ForegroundColor Yellow
+    Write-Host "Save CSV ? >>> " -NoNewline -ForegroundColor Yellow
+    $readSaveCSV = Read-Host
+    if ($readSaveCSV -eq "Y") {
+        Write-Host "Exporting Data to CSV" -ForegroundColor Yellow
+        $functionName | Export-Csv -LiteralPath $tempdir\"$ProgramName-$functionName-$curDate.csv"
+        Write-Host "Export Complete" -ForegroundColor Yellow
+    }
+}
 
 function installModule {
     Write-Host "Checking if ExchangeOnlineManagement Module is installed" -ForegroundColor Yellow
@@ -44,14 +55,39 @@ function isConnected {
         Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
         Connect-ExchangeOnline -ShowBanner:$False
     }
+    else {
+        Write-Host "Disconnecting Microsoft 365 - Exchange Online" -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        Disconnect-ExchangeOnline -Confirm:$false
+    }
 }
 
-function isConnected {
-    $Connection = Get-ConnectionInformation
-    If (-Not ( $Connection.State -match 'Connected' ) ){
-        Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
-        Connect-ExchangeOnline -ShowBanner:$False
-    }
+function listMailbox {
+    $functionName = "listMailbox" 
+    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress" -Debug
+    Write-Host ""
+    saveCSV
+    Write-Host 'Press any key to continue...' -NoNewline -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
+
+
+
+function customCmd {
+    $whileLoopVarCustomCmd = 1
+    Logo
+    while ($whileLoopVarCustomCmd -eq 1) {
+        write-host ""
+        Write-Host "Exchange Online Shell >>> " -NoNewline -ForegroundColor Yellow
+        $readCustomCmd = Read-Host
+        if ($readCustomCmd -eq "exit"){
+            $whileLoopVarCustomCmd = 0
+        }
+        else {
+            Invoke-Expression $customCommand -Debug
+            Write-Host ""
+        }       
+    }    
 }
 
 
@@ -83,8 +119,8 @@ if (-Not (Test-Path $tempdir)){
 #####################################################################
 #####################################################################                                
 # Start Logging in Install directory (Tempdir)
-$CurDate = Get-Date -Format "dd/MM/yyyy_HH/mm/ss"
-Start-Transcript -Path $tempdir\"$ProgramName-$version-$CurDate.log" | Out-Null
+$CurDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
+Start-Transcript -Path "$tempdir\$ProgramName-$version-$CurDate.log" | Out-Null
 Write-Host " "
 Write-Host " "
 Write-Host "################ LOG BEGIN ################" -ForegroundColor Magenta
@@ -102,7 +138,7 @@ Write-Host
 Write-Host "----------------------------" -ForegroundColor Magenta
 write-Host "| Always trust the process |" -ForegroundColor Magenta
 Write-Host "----------------------------" -ForegroundColor Magenta
-Start-Sleep -Seconds 3
+#Start-Sleep -Seconds 3
 #####################################################################
 
 
@@ -140,8 +176,8 @@ Start-Sleep -Seconds 3
 
 ##################################
 # Begin Loop
-$WhileLoopVar = 1
-while ($WhileLoopVar -eq 1){
+$WhileLoopVarMenu = 1
+while ($WhileLoopVarMenu -eq 1){
     
     #Check Connection State
     $Connection = Get-ConnectionInformation
@@ -156,7 +192,7 @@ while ($WhileLoopVar -eq 1){
 # Interactive Menu #
 ##################################
 #Menu items
-$list = @('Install Modules','Connect MS365','EXIT')
+$list = @('Install Modules','Connect/Disconnect MS365',"List Mailboxes",'Custom Command','EXIT')
  
 #menu offset to allow space to write a message above the menu
 $xmin = 3
@@ -233,7 +269,9 @@ while ($menu_active) {
 Clear-Host
 switch ($selection) {
     "Install Modules" {installModule}
-    "Connect MS365" {isConnected}
+    "Connect/Disconnect MS365" {isConnected}
+    "List Mailboxes" {listMailbox}
+    "Custom Command" {customCmd}
     "EXIT" {UI_EXIT}
 }
 #####################################################################
