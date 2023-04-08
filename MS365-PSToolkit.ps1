@@ -13,6 +13,7 @@ $error.clear()
 $ProgressPreference = 'SilentlyContinue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
 $curDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
+[console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
 #######################################
 
 
@@ -32,9 +33,11 @@ function saveCSV {
     Write-Host "Save CSV ? >>> " -NoNewline -ForegroundColor Yellow
     $readSaveCSV = Read-Host
     if ($readSaveCSV -eq "Y") {
-        Write-Host "Exporting Data to CSV" -ForegroundColor Yellow
-        $functionName | Export-Csv -LiteralPath $tempdir\"$ProgramName-$functionName-$curDate.csv"
+        Write-Host "`nExporting Data to CSV" -ForegroundColor Yellow
+        Invoke-Expression $functionCmd | Export-Csv -LiteralPath $tempdir\"$ProgramName-$functionName-$curDate.csv"
         Write-Host "Export Complete" -ForegroundColor Yellow
+        Write-Host '`nPress any key to return to menu' -NoNewline -ForegroundColor Yellow
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
 }
 
@@ -64,13 +67,27 @@ function isConnected {
 
 function listMailbox {
     $functionName = "listMailbox" 
+    $functionCmd = "Get-Mailbox -Resultsize Unlimited | Select-Object Name, PrimarySMTPAddress"
     Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress" -Debug
     Write-Host ""
     saveCSV
-    Write-Host 'Press any key to continue...' -NoNewline -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 }
 
+function listMailboxPermissions {
+    $functionName = "listMailboxPermissions" 
+    $functionCmd = "Get-mailbox | Get-MailboxPermission | Select-object Identity, User, AccessRights"
+    Invoke-Expression "Get-mailbox | Get-MailboxPermission | ft Identity, User, AccessRights" -Debug
+    Write-Host ""
+    saveCSV
+}
+
+function listMailboxSize {
+    $functionName = "listMailboxSize" 
+    $functionCmd = "get-mailbox | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota"
+    Invoke-Expression "get-mailbox | Get-MailboxStatistics | fl DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota" -Debug
+    Write-Host ""
+    saveCSV
+}
 
 
 function customCmd {
@@ -132,7 +149,7 @@ Write-Host "################ LOG BEGIN ################" -ForegroundColor Magent
 Logo
 Write-Host
 Write-Host "Microsoft 365 Powershell Toolkit" -ForegroundColor Yellow
-Write-Host "MATRIXNET ~ Vincent" -ForegroundColor Yellow
+Write-Host "`nMATRIXNET ~ Vincent" -ForegroundColor Yellow
 Write-Host "INCONEL BV ~ Vincent" -ForegroundColor Yellow
 Write-Host
 Write-Host "----------------------------" -ForegroundColor Magenta
@@ -192,7 +209,7 @@ while ($WhileLoopVarMenu -eq 1){
 # Interactive Menu #
 ##################################
 #Menu items
-$list = @('Install Modules','Connect/Disconnect MS365',"List Mailboxes",'Custom Command','EXIT')
+$list = @('Install Modules','Connect/Disconnect MS365','List Mailbox','List Mailbox Permissions', 'List Mailbox Size','Custom Command','EXIT')
  
 #menu offset to allow space to write a message above the menu
 $xmin = 3
@@ -270,7 +287,9 @@ Clear-Host
 switch ($selection) {
     "Install Modules" {installModule}
     "Connect/Disconnect MS365" {isConnected}
-    "List Mailboxes" {listMailbox}
+    "List Mailbox" {listMailbox}
+    "List Mailbox Permissions" {listMailboxPermissions}
+    "List Mailbox Size" {listMailboxSize}
     "Custom Command" {customCmd}
     "EXIT" {UI_EXIT}
 }
