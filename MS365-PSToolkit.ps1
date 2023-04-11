@@ -68,7 +68,7 @@ function isConnected {
 function listMailbox {
     $functionName = "listMailbox" 
     $functionCmd = "Get-Mailbox -Resultsize Unlimited | Select-Object Name, PrimarySMTPAddress"
-    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress" -Debug
+    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress -autosize" -Debug
     Write-Host ""
     saveCSV
 }
@@ -76,7 +76,7 @@ function listMailbox {
 function listMailboxPermissions {
     $functionName = "listMailboxPermissions" 
     $functionCmd = "Get-mailbox | Get-MailboxPermission | Select-object Identity, User, AccessRights"
-    Invoke-Expression "Get-mailbox | Get-MailboxPermission | ft Identity, User, AccessRights" -Debug
+    Invoke-Expression "Get-mailbox | Get-MailboxPermission | ft Identity, User, AccessRights -autosize" -Debug
     Write-Host ""
     saveCSV
 }
@@ -84,7 +84,7 @@ function listMailboxPermissions {
 function listMailboxSize {
     $functionName = "listMailboxSize" 
     $functionCmd = "get-mailbox | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota"
-    Invoke-Expression "get-mailbox | Get-MailboxStatistics | fl DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota" -Debug
+    Invoke-Expression "get-mailbox | Get-MailboxStatistics | ft DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota -autosize" -Debug
     Write-Host ""
     saveCSV
 }
@@ -101,7 +101,7 @@ function customCmd {
             $whileLoopVarCustomCmd = 0
         }
         else {
-            Invoke-Expression $customCommand -Debug
+            Invoke-Expression $readCustomCmd -Debug
             Write-Host ""
         }       
     }    
@@ -141,6 +141,8 @@ Start-Transcript -Path "$tempdir\$ProgramName-$version-$CurDate.log" | Out-Null
 Write-Host " "
 Write-Host " "
 Write-Host "################ LOG BEGIN ################" -ForegroundColor Magenta
+Clear-Host
+Start-Sleep -Milliseconds 250
 #####################################################################
 
 #####################################################################
@@ -155,7 +157,7 @@ Write-Host
 Write-Host "----------------------------" -ForegroundColor Magenta
 write-Host "| Always trust the process |" -ForegroundColor Magenta
 Write-Host "----------------------------" -ForegroundColor Magenta
-#Start-Sleep -Seconds 3
+Start-Sleep -Seconds 3
 #####################################################################
 
 
@@ -165,26 +167,26 @@ Write-Host "----------------------------" -ForegroundColor Magenta
 #########################
 # Check admin rights    #
 #-----------------------#
-# function isadmin
-#  {
-#  # Returns true/false
-#    ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-#  }
-#  if (isadmin -eq "True") {
-#      Write-Host "`nGot Administrator Permissions" -ForegroundColor Green
-#      Start-Sleep -Seconds 1
-#  }
-#  else {
-#      Write-Host "`nThis script needs Administrator Privileges to work it's magic" -ForegroundColor Red
-#      Start-Sleep -Seconds 3
-#  }
-#  if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
-#   if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) {
-#    $CommandLine = "-File `"" + $MyInvocation.MyCommand.Path + "`" " + $MyInvocation.UnboundArguments
-#    Start-Process -FilePath PowerShell.exe -Verb Runas -ArgumentList $CommandLine
-#    Exit
-#   }
-# }
+function isadmin
+ {
+ # Returns true/false
+   ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+ }
+ if (isadmin -eq "True") {
+     Write-Host "`nGot Administrator Permissions" -ForegroundColor Green
+     Start-Sleep -Seconds 1
+ }
+ else {
+     Write-Host "`nThis script needs Administrator Privileges to work it's magic" -ForegroundColor Red
+     Start-Sleep -Seconds 3
+ }
+ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
+  if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) {
+   $CommandLine = "-File `"" + $MyInvocation.MyCommand.Path + "`" " + $MyInvocation.UnboundArguments
+   Start-Process -FilePath PowerShell.exe -Verb Runas -ArgumentList $CommandLine
+   Exit
+  }
+}
 #####################################################################
 
 
