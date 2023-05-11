@@ -10,3 +10,4 @@
 * Email Log ?
 * Error reporting
 * Add status indicators (Connection State, ExchangeOnlineModule installed)
+* Client SMTP Auth List
