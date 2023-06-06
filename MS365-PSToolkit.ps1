@@ -36,7 +36,7 @@ function saveCSV {
         Write-Host "`nExporting Data to CSV" -ForegroundColor Yellow
         Invoke-Expression $functionCmd | Export-Csv -LiteralPath $tempdir\"$ProgramName-$functionName-$curDate.csv"
         Write-Host "Export Complete" -ForegroundColor Yellow
-        Write-Host '`nPress any key to return to menu' -NoNewline -ForegroundColor Yellow
+        Write-Host 'Press any key to return to menu' -NoNewline -ForegroundColor Yellow
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
 }
@@ -77,6 +77,16 @@ function listMailboxPermissions {
     $functionName = "listMailboxPermissions" 
     $functionCmd = "Get-mailbox | Get-MailboxPermission | Select-object Identity, User, AccessRights"
     Invoke-Expression "Get-mailbox | Get-MailboxPermission | ft Identity, User, AccessRights -autosize" -Debug
+    Write-Host ""
+    saveCSV
+}
+
+function listSpecificMailboxPermissions {
+    Write-Host "Enter Username to check FullAccess rights" -ForegroundColor Yellow
+    $specificUser = Read-Host "Username"
+    $functionName = "listSpecificMailboxPermissions" 
+    $functionCmd = "Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $specificUser | ft User,Identity,AccessRights"
+    Invoke-Expression "Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $specificUser | ft User,Identity,AccessRights -autosize" -Debug
     Write-Host ""
     saveCSV
 }
@@ -211,7 +221,7 @@ while ($WhileLoopVarMenu -eq 1){
 # Interactive Menu #
 ##################################
 #Menu items
-$list = @('Install Modules','Connect/Disconnect MS365','List Mailbox','List Mailbox Permissions', 'List Mailbox Size','Custom Command','EXIT')
+$list = @('Install Modules','Connect/Disconnect MS365','List Mailbox','List Mailbox Permissions', 'List Specific Mailbox Permissions', 'List Mailbox Size','Custom Command','EXIT')
  
 #menu offset to allow space to write a message above the menu
 $xmin = 3
@@ -291,6 +301,7 @@ switch ($selection) {
     "Connect/Disconnect MS365" {isConnected}
     "List Mailbox" {listMailbox}
     "List Mailbox Permissions" {listMailboxPermissions}
+    "List Specific Mailbox Permissions" {listSpecificMailboxPermissions}
     "List Mailbox Size" {listMailboxSize}
     "Custom Command" {customCmd}
     "EXIT" {UI_EXIT}
