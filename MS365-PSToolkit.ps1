@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "1.0-beta.1"
+$version = "1.0-beta.2"
 $ProgramName = "MS365-PSToolkit"
 ########################################
 $tempdir = "C:\INSTALL\$ProgramName"
@@ -45,7 +45,7 @@ function installModule {
     Write-Host "Checking if ExchangeOnlineManagement Module is installed" -ForegroundColor Yellow
     if(-not (Get-Module ExchangeOnlineManagement -ListAvailable)){
         Write-Host "Installing Module" -ForegroundColor Yellow
-        Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force
+        Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force 
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Installed" -ForegroundColor Green
@@ -168,6 +168,7 @@ Write-Host "----------------------------" -ForegroundColor Magenta
 write-Host "| Always trust the process |" -ForegroundColor Magenta
 Write-Host "----------------------------" -ForegroundColor Magenta
 Start-Sleep -Seconds 3
+Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
 #####################################################################
 
 
