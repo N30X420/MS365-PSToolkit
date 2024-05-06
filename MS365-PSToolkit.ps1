@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "1.0-beta.3"
+$version = "1.0-beta.4"
 $ProgramName = "MS365-PSToolkit"
 ########################################
 $tempdir = "C:\INSTALL\$ProgramName"
@@ -67,8 +67,8 @@ function isConnected {
 
 function listMailbox {
     $functionName = "listMailbox" 
-    $functionCmd = "Get-Mailbox -Resultsize Unlimited | Select-Object Name, PrimarySMTPAddress, EmailAddresses"
-    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress,EmailAddresses -autosize" -Debug
+    $functionCmd = "Get-Mailbox -Resultsize Unlimited | Select-Object Name, PrimarySMTPAddress, RecipientTypeDetails, EmailAddresses"
+    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress,RecipientTypeDetails,EmailAddresses -autosize" -Debug
     Write-Host ""
     saveCSV
 }
