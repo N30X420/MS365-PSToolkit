@@ -1,13 +1,13 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.0-alpha"
+$version = "2.0"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
 #######################################
 #######################################
 $error.clear()
-$ProgressPreference = 'SilentlyContinue'
+$ProgressPreference = 'Continue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
 [console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
 #######################################
@@ -20,7 +20,8 @@ function Logo {
     Write-Host " | |\/| \__ \|_ \/ _ \__ \___|  _/\__ \ | |/ _ \/ _ \ | / / |  _|" -ForegroundColor Blue
     Write-Host " |_|  |_|___/___/\___/___/   |_|  |___/ |_|\___/\___/_|_\_\_|\__|" -ForegroundColor Blue
     Write-Host ""
-    write-Host "v$version" -ForegroundColor Blue
+    write-Host "v$version " -ForegroundColor Blue -NoNewline
+    Write-Host " $Script:NewVersionAvailable" -ForegroundColor Green
     Write-Host
     Write-Host "Microsoft 365 Powershell Toolkit" -ForegroundColor Cyan
     Write-Host "MATRIXNET ~ Vincent" -ForegroundColor Cyan
@@ -51,7 +52,7 @@ function CheckAdminPrivs {
             Start-Sleep -Seconds 1
         }
         else {
-            Write-Error "`nThis script needs Administrator Privileges to work it's magic"
+            Write-Error "This script needs Administrator Privileges to work it's magic"
             Start-Sleep -Seconds 3
         }
         if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
@@ -63,6 +64,15 @@ function CheckAdminPrivs {
         }
 }
 function CheckForUpdates {
+    try {
+        $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/N30X420/MS365-PSToolkit/releases"
+		$ReleaseInfo = ($Releases | Sort-Object id -desc)[0]
+		$LatestVersion = [version[]]$ReleaseInfo.Name.Trim('v')
+		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "Update $LatestVersion available"}
+    }
+    catch {
+        Write-Warning "Error while checking for updates"
+    }
     
     
 }
@@ -113,7 +123,7 @@ function MsGraphForcePasswordResetAllUsers {
         Disconnect-MgGraph | Out-Null
     }
     
-    Write-Host "This script will force every account to change password at next sign in." -ForegroundColor Yellow
+    Write-Warning "This script will force every account to change password at next sign in."
     Write-Host "`nContinue ? [y/n]"
     $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     if ($continue.Character -eq "n"){
@@ -321,10 +331,14 @@ function CreateMFAStatusReport {
 #-----------------------
 function Show-ExchangeOnlineMenu {
     Write-Host "#### Microsoft Exchange Online Menu ####" -ForegroundColor DarkCyan
-    Write-Host "`n(1) - List Mailbox"
-    Write-Host "(2) - List Mailbox Permissions"
-    Write-Host "(3) - List Specific Mailbox Permissions"
-    Write-Host "(4) - List Mailbox Size"
+    Write-Host "Exchange Online Connection : " -NoNewline -ForegroundColor Yellow
+    Write-Host "(#)" -ForegroundColor $connectionStatus
+    Write-Host "`n(1) - Install Required Modules"
+    Write-Host "(2) - Connect / Disconnect Exchange Online"
+    Write-Host "(3) - List Mailbox"
+    Write-Host "(4) - List Mailbox Permissions"
+    Write-Host "(5) - List Specific Mailbox Permissions"
+    Write-Host "(6) - List Mailbox Size"
     Write-Host "(8) - Custom Command"
     Write-Host "`n(9) - Main Menu"
     Write-Host ""
@@ -339,7 +353,7 @@ function installExchangeOnlineModule {
     Write-Host "Module Already Installed" -ForegroundColor Green
     Start-Sleep -Seconds 2
 }
-function isExchangeConnected {
+function ExchangeOnlineConnection {
     $Connection = Get-ConnectionInformation
     If (-Not ( $Connection.State -match 'Connected' ) ){
         Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
@@ -353,16 +367,18 @@ function isExchangeConnected {
 }
 function customExchangeCmd {
     $whileLoopVarCustomCmd = 1
+    Clear-Host
+    Start-Sleep -Milliseconds 250
     Logo
     while ($whileLoopVarCustomCmd -eq 1) {
         write-host ""
         Write-Host "Exchange Online Shell >>> " -NoNewline -ForegroundColor Yellow
-        $readCustomCmd = Read-Host
-        if ($readCustomCmd -eq "exit"){
+        $ExchangeOnlineCustomCmd = Read-Host
+        if ($ExchangeOnlineCustomCmd -eq "exit"){
             $whileLoopVarCustomCmd = 0
         }
         else {
-            Invoke-Expression $readCustomCmd -Debug
+            Invoke-Expression $ExchangeOnlineCustomCmd -Debug
             Write-Host ""
         }       
     }    
@@ -394,7 +410,7 @@ CheckAdminPrivs
 if (!(Test-Path $tempdir)) { 
     Write-Error "`n`nLog Directory not found"
     Write-Warning "Creating Log Directory in $tempdir"
-    New-Item -itemType Directory -Path $logdir | Out-Null
+    New-Item -itemType Directory -Path $tempdir | Out-Null
 }
 ######################
 
@@ -420,11 +436,21 @@ while ($WhileLoopVarMainMenu -eq 1){
                 Show-MsGraphMenu
                 $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
                     switch ($MsGraphMenuChoice) {
-                        49 {installMicrosoftGraphModule}
-                        50 {CheckMsGraphDelegatedPermissions}
-                        51 {MsGraphForcePasswordResetAllUsers}
-                        52 {MsGraphForcePasswordResetSingleUser}
-                        53 {CreateMFAStatusReport}
+                        49 {try {installMicrosoftGraphModule}
+                            catch {Write-Error "Error Running Module Installer"
+                                    Start-Sleep -Seconds 1}}
+                        50 {try {CheckMsGraphDelegatedPermissions}
+                            catch {Write-Error "Error Running Script"
+                                    Start-Sleep -Seconds 1}}
+                        51 {try {MsGraphForcePasswordResetAllUsers}
+                            catch {Write-Error "Error Running Script"
+                                    Start-Sleep -Seconds 1}}
+                        52 {try {MsGraphForcePasswordResetSingleUser}
+                            catch {Write-Error "Error Running Script"
+                                    Start-Sleep -Seconds 1}}
+                        53 {try {CreateMFAStatusReport}
+                            catch {Write-Error "Error Running Script"
+                                    Start-Sleep -Seconds 1}}
                         57 {
                             Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
                             $WhileLoopVarMsGraphMenu = 0
@@ -445,12 +471,30 @@ while ($WhileLoopVarMainMenu -eq 1){
                 Start-Sleep -Milliseconds 250
                 Logo
                 Start-Sleep -Milliseconds 250
+                $connectionStatus = "Red"
+                if (Get-Module ExchangeOnlineManagement -ListAvailable){
+                    $ExchangeOnlineConnectionState = Get-ConnectionInformation
+                    If ( $ExchangeOnlineConnectionState.State -match 'Connected' ){
+                        $connectionStatus = "Green"
+                    }
+                    else {
+                        $connectionStatus = "Red"
+                    }
+                }
                 Show-ExchangeOnlineMenu
                 $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
                     switch ($MsGraphMenuChoice) {
-                        49 {installExchangeOnlineModule}
-                        50 {}
+                        49 {try {installExchangeOnlineModule}
+                            catch {Write-Error "Error Running Module Installer"
+                                    Start-Sleep -Seconds 1}}
+                        50 {try {ExchangeOnlineConnection}
+                            catch {Write-Error "Error while connecting"
+                                    Start-Sleep -Seconds 1}}
                         51 {}
+                        52 {}
+                        53 {}
+                        54 {}
+                        56 {customExchangeCmd}
                         57 {
                             Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
                             $WhileLoopVarExchangeOnlineMenu = 0
