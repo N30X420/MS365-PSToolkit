@@ -1,5 +1,7 @@
 # Production
 builds/
+out/
 
 # Misc
 .vscode
+package.psd1
