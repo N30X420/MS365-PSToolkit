@@ -1,10 +1,10 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "1.0-beta.4"
+$version = "2.0-alpha"
 $ProgramName = "MS365-PSToolkit"
 ########################################
-$tempdir = "C:\INSTALL\$ProgramName"
+#$tempdir = "C:\INSTALL\$ProgramName-$version"
 #######################################
 #######################################
 # Fixed Variables
@@ -12,7 +12,7 @@ $tempdir = "C:\INSTALL\$ProgramName"
 $error.clear()
 $ProgressPreference = 'SilentlyContinue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
-$curDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
+#$curDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
 [console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
 #######################################
 
@@ -28,31 +28,158 @@ function Logo {
     write-Host "v$version" -ForegroundColor Blue
 }
 
-function saveCSV {
-    Write-Host "Save output to CSV ?  (Y/N)" -ForegroundColor Yellow
-    Write-Host "Save CSV ? >>> " -NoNewline -ForegroundColor Yellow
-    $readSaveCSV = Read-Host
-    if ($readSaveCSV -eq "Y") {
-        Write-Host "`nExporting Data to CSV" -ForegroundColor Yellow
-        Invoke-Expression $functionCmd | Export-Csv -LiteralPath $tempdir\"$ProgramName-$functionName-$curDate.csv"
-        Write-Host "Export Complete" -ForegroundColor Yellow
-        Write-Host 'Press any key to return to menu' -NoNewline -ForegroundColor Yellow
-        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    }
+
+
+function Show-MainMenu {
+    Write-Host "#### MAIN MENU ####" -ForegroundColor Cyan
+    Write-Host "`nSelect Microsoft 365 Service To Connect With"
+    Write-Host "`n(1) - Microsoft Graph"
+    Write-Host "(2) - Exchange Online"
+    Write-Host "(3) - Sharepoint Online"
+    Write-Host "`n(9) - Exit"
+    Write-Host ""
 }
 
-function installModule {
-    Write-Host "Checking if ExchangeOnlineManagement Module is installed" -ForegroundColor Yellow
+function Show-MsGraphMenu {
+    Write-Host "#### Microsoft Graph Menu ####" -ForegroundColor Cyan
+    Write-Host "(1) - Install Required Modules"
+    Write-Host "(2) - Check required permission scopes for MsGraph Command"
+    Write-Host "(3) - Tool - Forced password change at next login - all users"
+    Write-Host "(4) - Tool - Forced password change at next login - single user"
+    Write-Host "(5) - Report - Create MFA status report"
+    Write-Host "`n(9) - Main Menu"
+    Write-Host ""
+}
+
+function Show-ExchangeOnlineMenu {
+    Write-Host "#### Microsoft Exchange Online Menu ####" -ForegroundColor Cyan
+    Write-Host "`n(1) - List Mailbox"
+    Write-Host "(2) - List Mailbox Permissions"
+    Write-Host "(3) - List Specific Mailbox Permissions"
+    Write-Host "(4) - List Mailbox Size"
+    Write-Host "(8) - Custom Command"
+    Write-Host "`n(9) - Main Menu"
+    Write-Host ""
+}
+
+
+function installExchangeOnlineModule {
     if(-not (Get-Module ExchangeOnlineManagement -ListAvailable)){
-        Write-Host "Installing Module" -ForegroundColor Yellow
+        Write-Warning "Module ExchangeOnlineManagement not installed"
+        Write-Host "Installing ExchangeOnlineManagement Please Wait" -ForegroundColor Green
         Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force 
         }
     Start-Sleep -Seconds 1
-    Write-Host "Module Installed" -ForegroundColor Green
+    Write-Host "Module Already Installed" -ForegroundColor Green
     Start-Sleep -Seconds 2
 }
 
-function isConnected {
+function installMicrosoftGraphModule {
+    if(-not (Get-Module Microsoft.Graph -ListAvailable)){
+        Write-Warning "Module Microsoft.Graph not installed"
+        Write-Host "Installing Microsoft.Graph Please Wait" -ForegroundColor Green
+        Install-Module Microsoft.Graph -Scope CurrentUser -Force
+        Install-Module Microsoft.Graph.Beta -Scope CurrentUser -Force
+        }
+    Start-Sleep -Seconds 1
+    Write-Host "Module Already 
+    Installed" -ForegroundColor Green
+    Start-Sleep -Seconds 2
+}
+
+
+
+
+
+####################################
+function CheckMsGraphDelegatedPermissions {
+    $exit = 0
+    while ($exit -eq 0){
+        Write-Host "Enter command to see the required permission scopes"
+        $cmd = Read-Host "Command :"
+        if ($cmd -eq "exit"){
+            $exit = 1 
+        }
+        else {
+            Find-MgGraphCommand -Command "$cmd" | Select-Object -ExpandProperty Permissions | Select-Object -Unique name
+        }
+    }
+}
+
+function MsGraphForcePasswordResetAllUsers {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    #Disconnect from the Microsoft Graph If already connected
+    if (Get-MgContext) {
+        Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
+        Disconnect-MgGraph | Out-Null
+    }
+    
+    Write-Host "This script will force every account to change password at next sign in." -ForegroundColor Yellow
+    Write-Host "`nContinue ? [y/n]"
+    $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if ($continue.Character -eq "n"){
+        Exit
+    }
+    
+    # Connect to Microsoft Graph API
+    Connect-MgGraph -Scopes "User.Read.All", "User-PasswordProfile.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
+    
+    Write-Host "Would you like to exclude an account from this script? [y/n]"
+    $exclude = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if ($exclude.Character -eq "y"){
+        Write-Host "Enter UPN of account to exclude (example@domain.com)"
+        $excludedUPN = Read-Host "UPN :"
+        $excludedAccount = Get-MgBetaUser -UserId $excludedUPN
+    }
+    
+    
+    # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
+    $users = Get-MgBetaUser -All
+    
+    # Initialize progress counter
+    $counter = 0
+    $totalUsers = $users.Count
+    
+    # Loop through each user account
+    foreach ($user in $users) {
+        if ($user.Id -eq $excludedAccount.Id){continue} 
+        $counter++
+    
+        # Calculate percentage completion
+        $percentComplete = [math]::Round(($counter / $totalUsers) * 100)
+    
+        # Define progress bar parameters with user principal name
+        $progressParams = @{
+            Activity        = "Processing Users"
+            Status          = "User $($counter) of $totalUsers - $($user.UserPrincipalName) - $percentComplete% Complete"
+            PercentComplete = $percentComplete
+        }
+    
+        Write-Progress @progressParams
+        try {
+            Update-MgUser -UserId $user.id -PasswordProfile @{ ForceChangePasswordNextSignIn=$true}
+        }
+        catch {
+            Write-Warning "Error updating $($User.UserPrincipalName)"
+        }
+        
+    }
+    # Clear progress bar
+    Write-Progress -Activity "Processing Users" -Completed
+    
+}
+
+####################################
+
+
+
+
+
+
+
+
+function isExchangeConnected {
     $Connection = Get-ConnectionInformation
     If (-Not ( $Connection.State -match 'Connected' ) ){
         Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
@@ -65,42 +192,8 @@ function isConnected {
     }
 }
 
-function listMailbox {
-    $functionName = "listMailbox" 
-    $functionCmd = "Get-Mailbox -Resultsize Unlimited | Select-Object Name, PrimarySMTPAddress, RecipientTypeDetails, EmailAddresses"
-    Invoke-Expression "Get-Mailbox | ft name,PrimarySMTPAddress,RecipientTypeDetails,EmailAddresses -autosize" -Debug
-    Write-Host ""
-    saveCSV
-}
 
-function listMailboxPermissions {
-    $functionName = "listMailboxPermissions" 
-    $functionCmd = "Get-mailbox | Get-MailboxPermission | Select-object Identity, User, AccessRights"
-    Invoke-Expression "Get-mailbox | Get-MailboxPermission | ft Identity, User, AccessRights -autosize" -Debug
-    Write-Host ""
-    saveCSV
-}
-
-function listSpecificMailboxPermissions {
-    Write-Host "Enter Username to check FullAccess rights" -ForegroundColor Yellow
-    $specificUser = Read-Host "Username"
-    $functionName = "listSpecificMailboxPermissions" 
-    $functionCmd = "Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $specificUser | ft User,Identity,AccessRights"
-    Invoke-Expression "Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $specificUser | ft User,Identity,AccessRights -autosize" -Debug
-    Write-Host ""
-    saveCSV
-}
-
-function listMailboxSize {
-    $functionName = "listMailboxSize" 
-    $functionCmd = "get-mailbox | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota"
-    Invoke-Expression "get-mailbox | Get-MailboxStatistics | ft DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota -autosize" -Debug
-    Write-Host ""
-    saveCSV
-}
-
-
-function customCmd {
+function customExchangeCmd {
     $whileLoopVarCustomCmd = 1
     Logo
     while ($whileLoopVarCustomCmd -eq 1) {
@@ -118,42 +211,8 @@ function customCmd {
 }
 
 
-function UI_EXIT {
-    Clear-Host
-    Write-Host "BYE BYE !!!" -ForegroundColor Green
-    Write-Host "`n############################################" -ForegroundColor Magenta
-    Write-Host "Last Errors :" -ForegroundColor Yellow
-    Write-host "$error" -ForegroundColor Red
-    Write-Host "############################################" -ForegroundColor Magenta
-    $curDateFinished = Get-Date -Format "dd/MM/yyyy HH/mm/ss"
-    Write-Host "`nFinished : $curDateFinished" -ForegroundColor Yellow
-    Write-Host " "
-    Write-Host " "
-    Write-Host "################ LOG END ################"-ForegroundColor Magenta
-    Stop-Transcript
-    Start-Sleep -Seconds 3
-    Exit 0
-    
-}
 
 
-
-#####################################################################
-# Check Install Folder
-if (-Not (Test-Path $tempdir)){
-    New-Item -ItemType Directory -Path $tempdir
-}
-#####################################################################
-#####################################################################                                
-# Start Logging in Install directory (Tempdir)
-$CurDate = Get-Date -Format "dd-MM-yyyy-HH-mm-ss"
-Start-Transcript -Path "$tempdir\$ProgramName-$version-$CurDate.log" | Out-Null
-Write-Host " "
-Write-Host " "
-Write-Host "################ LOG BEGIN ################" -ForegroundColor Magenta
-Clear-Host
-Start-Sleep -Milliseconds 250
-#####################################################################
 
 #####################################################################
 # Main Code --- Main Code --- Main Code --- Main Code --- Main Code #
@@ -162,7 +221,6 @@ Logo
 Write-Host
 Write-Host "Microsoft 365 Powershell Toolkit" -ForegroundColor Yellow
 Write-Host "`nMATRIXNET ~ Vincent" -ForegroundColor Yellow
-Write-Host "INCONEL BV ~ Vincent" -ForegroundColor Yellow
 Write-Host
 Write-Host "----------------------------" -ForegroundColor Magenta
 write-Host "| Always trust the process |" -ForegroundColor Magenta
@@ -170,10 +228,6 @@ Write-Host "----------------------------" -ForegroundColor Magenta
 Start-Sleep -Seconds 3
 Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
 #####################################################################
-
-
-
-
 
 #########################
 # Check admin rights    #
@@ -204,108 +258,78 @@ function isadmin
 
 
 
-##################################
+
 # Begin Loop
-$WhileLoopVarMenu = 1
-while ($WhileLoopVarMenu -eq 1){
-    
-    #Check Connection State
-    $Connection = Get-ConnectionInformation
-    If ( $Connection.State -match 'Connected' ){
-        Write-Host "Connected to Microsoft 365 - Exchange Online" -ForegroundColor Green
-        $connectionStatus = "Green"
-    }
-    else {
-        $connectionStatus = "Red"
-    }
-#####################################################################
-# Interactive Menu #
-##################################
-#Menu items
-$list = @('Install Modules','Connect/Disconnect MS365','List Mailbox','List Mailbox Permissions', 'List Specific Mailbox Permissions', 'List Mailbox Size','Custom Command','EXIT')
- 
-#menu offset to allow space to write a message above the menu
-$xmin = 3
-$ymin = 15
- 
-#Write Menu
-Clear-Host
-Logo
-Write-Host ""
-Write-Host "Connection : " -NoNewline -ForegroundColor Yellow
-Write-Host "(#)" -ForegroundColor $connectionStatus
-Write-Host "`n"
-Write-Host ""
-Write-Host "  Use the up / down arrow to navigate and Enter to make a selection" -ForegroundColor Yellow
-[Console]::SetCursorPosition(0, $ymin)
-foreach ($name in $List) {
-    for ($i = 0; $i -lt $xmin; $i++) {
-        Write-Host " " -NoNewline
-    }
-    Write-Host "   " + $name
-}
- 
-#Highlights the selected line
-function Write-Highlighted {
- 
-    [Console]::SetCursorPosition(1 + $xmin, $cursorY + $ymin)
-    Write-Host ">" -BackgroundColor Yellow -ForegroundColor Black -NoNewline
-    Write-Host " " + $List[$cursorY] -BackgroundColor Yellow -ForegroundColor Black
-    [Console]::SetCursorPosition(0, $cursorY + $ymin)     
-}
- 
-#Undoes highlight
-function Write-Normal {
-    [Console]::SetCursorPosition(1 + $xmin, $cursorY + $ymin)
-    Write-Host "  " + $List[$cursorY]  
-}
- 
-#highlight first item by default
-$cursorY = 0
-Write-Highlighted
- 
-$selection = ""
-$menu_active = $true
-while ($menu_active) {
-    if ([console]::KeyAvailable) {
-        $x = $Host.UI.RawUI.ReadKey()
-        [Console]::SetCursorPosition(1, $cursorY)
-        Write-Normal
-        switch ($x.VirtualKeyCode) { 
-            38 {
-                #down key
-                if ($cursorY -gt 0) {
-                    $cursorY = $cursorY - 1
-                }
-            }
- 
-            40 {
-                #up key
-                if ($cursorY -lt $List.Length - 1) {
-                    $cursorY = $cursorY + 1
-                }
-            }
-            13 {
-                #enter key
-                $selection = $List[$cursorY]
-                $menu_active = $false
+$WhileLoopVarMainMenu = 1
+while ($WhileLoopVarMainMenu -eq 1){
+    Clear-Host
+    Start-Sleep -Milliseconds 500
+    Show-MainMenu
+    $MainMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
+    switch ($MainMenuChoice) {
+        49 {
+            $WhileLoopVarMsGraphMenu = 1
+            while ($WhileLoopVarMsGraphMenu -eq 1){
+                Clear-Host
+                Start-Sleep -Milliseconds 500
+                Show-MsGraphMenu
+                $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
+                    switch ($MsGraphMenuChoice) {
+                        49 {installMicrosoftGraphModule}
+                        50 {CheckMsGraphDelegatedPermissions}
+                        51 {MsGraphForcePasswordResetAllUsers}
+                        57 {
+                            Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
+                            $WhileLoopVarMsGraphMenu = 0
+                        }
+                        default {
+                            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+                            Start-Sleep -Seconds 1
+                        }
+                    }
             }
         }
-        Write-Highlighted
+
+
+        50 {
+            $WhileLoopVarExchangeOnlineMenu = 1
+            while ($WhileLoopVarExchangeOnlineMenu -eq 1){
+                Clear-Host
+                Start-Sleep -Milliseconds 500
+                Show-MsGraphMenu
+                $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
+                    switch ($MsGraphMenuChoice) {
+                        49 {installExchangeOnlineModule}
+                        50 {}
+                        51 {}
+                        57 {
+                            Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
+                            $WhileLoopVarExchangeOnlineMenu = 0
+                        }
+                        default {
+                            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+                            Start-Sleep -Seconds 1
+                        }
+                    }
+            }
+        }
+        51 { # ASCII for "3"
+            Write-Host "3"
+        }
+        57 { # ASCII for "9"
+            Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
+            $WhileLoopVarMainMenu = 0
+            exit
+        }
+        default {
+            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+            Start-Sleep -Seconds 1
+        }
     }
-    Start-Sleep -Milliseconds 5 #Prevents CPU usage from spiking while looping
+
+    if ($MainMenuChoice -ne 57) {
+        Write-Host ""
+        Start-Sleep -Seconds 2
+    }
 }
- 
-Clear-Host
-switch ($selection) {
-    "Install Modules" {installModule}
-    "Connect/Disconnect MS365" {isConnected}
-    "List Mailbox" {listMailbox}
-    "List Mailbox Permissions" {listMailboxPermissions}
-    "List Specific Mailbox Permissions" {listSpecificMailboxPermissions}
-    "List Mailbox Size" {listMailboxSize}
-    "Custom Command" {customCmd}
-    "EXIT" {UI_EXIT}
-}
-#####################################################################
-}
+exit
