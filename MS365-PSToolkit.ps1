@@ -28,7 +28,7 @@ function Logo {
 }
 function Show-MainMenu {
     Write-Host "#### MAIN MENU ####" -ForegroundColor DarkCyan
-    Write-Host "`nSelect Microsoft 365 Service To Connect With"
+    Write-Host "Select Microsoft 365 Service To Connect With"
     Write-Host "`n(1) - Microsoft Graph"
     Write-Host "(2) - Exchange Online"
     Write-Host "(3) - Sharepoint Online"
@@ -62,7 +62,10 @@ function CheckAdminPrivs {
             }
         }
 }
-
+function CheckForUpdates {
+    
+    
+}
 
 ####################################
 #  MsGraph  #
