@@ -105,6 +105,7 @@ function Format-Hyperlink {
   }
 function CatchError {
     Start-Sleep -Seconds 1
+    Write-Warning "Runtime Error"
     Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 }
@@ -610,10 +611,11 @@ while ($WhileLoopVarMainMenu -eq 1){
                         catch {Write-Error "Error while connecting"
                             CatchError}}
                     51 {try {ExchangeOnlineListMailbox}
-                        catch {CatchError}}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
                     52 {}
                     53 {}
-                    54 {
+                    55 {
                         $WhileLoopVarExchangeOnlineToolsMenu = 1
                         while ($WhileLoopVarExchangeOnlineToolsMenu -eq 1){
                             Clear-Host
