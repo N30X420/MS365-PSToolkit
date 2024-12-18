@@ -410,6 +410,31 @@ function ExchangeOnlineConnection {
         Disconnect-ExchangeOnline -Confirm:$false
     }
 }
+
+function ExchangeOnlineListMailbox {
+    
+    
+}
+
+function ExchangeOnlineSaveSentItemsInSharedMailboxAll {
+    $mailboxes = (get-mailbox -ResultSize Unlimited -RecipientTypeDetails Sharedmailbox)
+    $counter = 0
+    $totalmailboxes = $mailboxes.Count
+    foreach ($mailbox in $mailboxes){ 
+        $counter++
+        $percentComplete = [math]::Round(($counter / $totalmailboxes) * 100)
+        $progressParams = @{
+            Activity        = "Processing Mailbox"
+            Status          = "Mailbox $($counter) of $totalmailboxes - $($Mailbox.Name) - $percentComplete% Complete"
+            PercentComplete = $percentComplete
+        }
+        Write-Progress @progressParams
+        Set-mailbox -Identity $mailbox.Identity -MessageCopyForSendOnBehalfEnabled $true -MessageCopyForSentAsEnabled $true
+    } 
+    Write-Progress -Activity "Processing Mailboxes" -Completed
+        
+}
+
 function customExchangeCmd {
     $whileLoopVarCustomCmd = 1
     Clear-Host
@@ -451,13 +476,7 @@ Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
 ######################
 CheckPowershellVersion
 CheckAdminPrivs
-
-if (!(Test-Path $tempdir)) { 
-    Write-Error "`n`nLog Directory not found"
-    Write-Warning "Creating Log Directory in $tempdir"
-    New-Item -itemType Directory -Path $tempdir | Out-Null
-}
-
+if (!(Test-Path $tempdir)) {New-Item -itemType Directory -Path $tempdir | Out-Null}
 CheckForUpdates
 ######################
 
