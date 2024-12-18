@@ -71,7 +71,7 @@ function CheckForUpdates {
         $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/N30X420/MS365-PSToolkit/releases"
 		$ReleaseInfo = ($Releases | Sort-Object id -desc)[0]
 		$LatestVersion = [version[]]$ReleaseInfo.Name.Trim('v')
-		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "$(Format-Hyperlink -Uri "$GithubRepo" -Label "v$LatestVersion") v$LatestVersion update available"}
+		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "v$LatestVersion is available $(Format-Hyperlink -Uri "$GithubRepo" -Label "v$LatestVersion")"}
     }
     catch {
         Write-Warning "Error while checking for updates"
@@ -359,7 +359,7 @@ function CreateMFAStatusReport {
 function Show-ExchangeOnlineMenu {
     Write-Host "######## Microsoft Exchange Online Menu ########" -ForegroundColor DarkCyan
     Write-Host "Exchange Online Connection : " -NoNewline -ForegroundColor Yellow
-    Write-Host "(#)" -ForegroundColor $connectionStatus
+    Write-Host "$connectionStatus" -ForegroundColor $connectionStatusColor
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Exchange Online"
     Write-Host "(3) - List Mailbox - Coming Soon" -ForegroundColor Red
@@ -499,14 +499,17 @@ while ($WhileLoopVarMainMenu -eq 1){
                 Start-Sleep -Milliseconds 250
                 Logo
                 Start-Sleep -Milliseconds 250
-                $connectionStatus = "Red"
+                $connectionStatus = "Disconnected"
+                $connectionStatusColor = "Red"
                 if (Get-Module ExchangeOnlineManagement -ListAvailable){
                     $ExchangeOnlineConnectionState = Get-ConnectionInformation
                     If ( $ExchangeOnlineConnectionState.State -match 'Connected' ){
-                        $connectionStatus = "Green"
+                        $connectionStatus = "Connected"
+                        $connectionStatusColor = "Green"
                     }
                     else {
-                        $connectionStatus = "Red"
+                        $connectionStatus = "Disconnected"
+                        $connectionStatusColor = "Red"
                     }
                 }
                 Show-ExchangeOnlineMenu
