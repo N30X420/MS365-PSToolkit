@@ -556,6 +556,7 @@ while ($WhileLoopVarMainMenu -eq 1){
         57 {
             Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
             $WhileLoopVarMainMenu = 0
+            Start-Sleep -Seconds 2
             exit
         }
         default {Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
