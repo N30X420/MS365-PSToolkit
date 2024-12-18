@@ -4,6 +4,7 @@
 $version = "2.0"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
+$GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
 #######################################
 #######################################
 $error.clear()
@@ -28,12 +29,14 @@ function Logo {
     Write-Host ""
 }
 function Show-MainMenu {
-    Write-Host "#### MAIN MENU ####" -ForegroundColor DarkCyan
+    Write-Host "################## MAIN MENU ##################" -ForegroundColor DarkCyan
     Write-Host "Select Microsoft 365 Service To Connect With"
     Write-Host "`n(1) - Microsoft Graph"
     Write-Host "(2) - Exchange Online"
-    Write-Host "(3) - Sharepoint Online"
-    Write-Host "`n(9) - Exit"
+    Write-Host "(3) - Sharepoint Online - Coming Soon" -ForegroundColor Red
+    Write-Host "`n(8) - Check For Updates"
+    Write-Host "(9) - Exit"
+    Write-Host "###############################################" -ForegroundColor DarkCyan
     Write-Host ""
 }
 function CheckPowershellVersion {
@@ -68,26 +71,50 @@ function CheckForUpdates {
         $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/N30X420/MS365-PSToolkit/releases"
 		$ReleaseInfo = ($Releases | Sort-Object id -desc)[0]
 		$LatestVersion = [version[]]$ReleaseInfo.Name.Trim('v')
-		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "Update $LatestVersion available"}
+		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "$(Format-Hyperlink -Uri "$GithubRepo" -Label "v$LatestVersion") v$LatestVersion update available"}
     }
     catch {
         Write-Warning "Error while checking for updates"
+        Start-Sleep -Seconds 2
     }
-    
-    
 }
+function Format-Hyperlink {
+    param(
+      [Parameter(ValueFromPipeline = $true, Position = 0)]
+      [ValidateNotNullOrEmpty()]
+      [Uri] $Uri,
+  
+      [Parameter(Mandatory=$false, Position = 1)]
+      [string] $Label
+    )
+  
+    if (($PSVersionTable.PSVersion.Major -lt 6 -or $IsWindows) -and -not $Env:WT_SESSION) {
+      # Fallback for Windows users not inside Windows Terminal
+      if ($Label) {
+        return "($Uri)"
+      }
+      return "$Uri"
+    }
+  
+    if ($Label) {
+      return "`e]8;;$Uri`e\$Label`e]8;;`e\"
+    }
+  
+    return "$Uri"
+  }
 
 ####################################
 #  MsGraph  #
 #-------------
 function Show-MsGraphMenu {
-    Write-Host "#### Microsoft Graph Menu ####" -ForegroundColor DarkCyan
+    Write-Host "############# Microsoft Graph Menu #############" -ForegroundColor DarkCyan
     Write-Host "(1) - Install Required Modules"
     Write-Host "(2) - Check required permission scopes for MsGraph Command"
     Write-Host "(3) - Tool - Forced password change at next login - all users"
     Write-Host "(4) - Tool - Forced password change at next login - single user"
     Write-Host "(5) - Report - Create MFA status report"
     Write-Host "`n(9) - Main Menu"
+    Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
 }
 function installMicrosoftGraphModule {
@@ -330,17 +357,18 @@ function CreateMFAStatusReport {
 #  Exchange Online  #
 #-----------------------
 function Show-ExchangeOnlineMenu {
-    Write-Host "#### Microsoft Exchange Online Menu ####" -ForegroundColor DarkCyan
+    Write-Host "######## Microsoft Exchange Online Menu ########" -ForegroundColor DarkCyan
     Write-Host "Exchange Online Connection : " -NoNewline -ForegroundColor Yellow
     Write-Host "(#)" -ForegroundColor $connectionStatus
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Exchange Online"
-    Write-Host "(3) - List Mailbox"
-    Write-Host "(4) - List Mailbox Permissions"
-    Write-Host "(5) - List Specific Mailbox Permissions"
-    Write-Host "(6) - List Mailbox Size"
+    Write-Host "(3) - List Mailbox - Coming Soon" -ForegroundColor Red
+    Write-Host "(4) - List Mailbox Permissions - Coming Soon" -ForegroundColor Red
+    Write-Host "(5) - List Specific Mailbox Permissions - Coming Soon" -ForegroundColor Red
+    Write-Host "(6) - List Mailbox Size - Coming Soon" -ForegroundColor Red
     Write-Host "(8) - Custom Command"
     Write-Host "`n(9) - Main Menu"
+    Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
 }
 function installExchangeOnlineModule {
@@ -412,6 +440,8 @@ if (!(Test-Path $tempdir)) {
     Write-Warning "Creating Log Directory in $tempdir"
     New-Item -itemType Directory -Path $tempdir | Out-Null
 }
+
+CheckForUpdates
 ######################
 
 ##############
@@ -435,31 +465,29 @@ while ($WhileLoopVarMainMenu -eq 1){
                 Start-Sleep -Milliseconds 250
                 Show-MsGraphMenu
                 $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
-                    switch ($MsGraphMenuChoice) {
-                        49 {try {installMicrosoftGraphModule}
-                            catch {Write-Error "Error Running Module Installer"
-                                    Start-Sleep -Seconds 1}}
-                        50 {try {CheckMsGraphDelegatedPermissions}
-                            catch {Write-Error "Error Running Script"
-                                    Start-Sleep -Seconds 1}}
-                        51 {try {MsGraphForcePasswordResetAllUsers}
-                            catch {Write-Error "Error Running Script"
-                                    Start-Sleep -Seconds 1}}
-                        52 {try {MsGraphForcePasswordResetSingleUser}
-                            catch {Write-Error "Error Running Script"
-                                    Start-Sleep -Seconds 1}}
-                        53 {try {CreateMFAStatusReport}
-                            catch {Write-Error "Error Running Script"
-                                    Start-Sleep -Seconds 1}}
-                        57 {
-                            Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
-                            $WhileLoopVarMsGraphMenu = 0
-                        }
-                        default {
-                            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
-                            Start-Sleep -Seconds 1
-                        }
-                    }
+                switch ($MsGraphMenuChoice) {
+                    49 {try {installMicrosoftGraphModule}
+                        catch {Write-Error "Error Running Module Installer"
+                            Start-Sleep -Seconds 1}}
+                    50 {try {CheckMsGraphDelegatedPermissions}
+                        catch {Write-Error "Error Running Script"
+                            Start-Sleep -Seconds 1}}
+                    51 {try {MsGraphForcePasswordResetAllUsers}
+                        catch {Write-Error "Error Running Script"
+                            Start-Sleep -Seconds 1}}
+                    52 {try {MsGraphForcePasswordResetSingleUser}
+                        catch {Write-Error "Error Running Script"
+                            Start-Sleep -Seconds 1}}
+                    53 {try {CreateMFAStatusReport}
+                        catch {Write-Error "Error Running Script"
+                            Start-Sleep -Seconds 1}}
+                    57 {
+                        Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
+                        $WhileLoopVarMsGraphMenu = 0}
+                        
+                        default {Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+                            Start-Sleep -Seconds 1}
+                }
             }
         }
 
@@ -483,41 +511,35 @@ while ($WhileLoopVarMainMenu -eq 1){
                 }
                 Show-ExchangeOnlineMenu
                 $MsGraphMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
-                    switch ($MsGraphMenuChoice) {
-                        49 {try {installExchangeOnlineModule}
-                            catch {Write-Error "Error Running Module Installer"
-                                    Start-Sleep -Seconds 1}}
-                        50 {try {ExchangeOnlineConnection}
-                            catch {Write-Error "Error while connecting"
-                                    Start-Sleep -Seconds 1}}
-                        51 {}
-                        52 {}
-                        53 {}
-                        54 {}
-                        56 {customExchangeCmd}
-                        57 {
-                            Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
-                            $WhileLoopVarExchangeOnlineMenu = 0
-                        }
-                        default {
-                            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
-                            Start-Sleep -Seconds 1
-                        }
-                    }
+                switch ($MsGraphMenuChoice) {
+                    49 {try {installExchangeOnlineModule}
+                        catch {Write-Error "Error Running Module Installer"
+                            Start-Sleep -Seconds 1}}
+                    50 {try {ExchangeOnlineConnection}
+                        catch {Write-Error "Error while connecting"
+                            Start-Sleep -Seconds 1}}
+                    51 {}
+                    52 {}
+                    53 {}
+                    54 {}
+                    56 {customExchangeCmd}
+                    57 {Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
+                        $WhileLoopVarExchangeOnlineMenu = 0}
+                        
+                        default {Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+                            Start-Sleep -Seconds 1}
+                }
             }
         }
-        51 {
-            Write-Host "3"
-        }
+        51 {Write-Host "3"}
+        56 {CheckForUpdates}
         57 {
             Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
             $WhileLoopVarMainMenu = 0
             exit
         }
-        default {
-            Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
-            Start-Sleep -Seconds 1
-        }
+        default {Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+            Start-Sleep -Seconds 1}
     }
 
     if ($MainMenuChoice -ne 57) {
