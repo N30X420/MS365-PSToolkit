@@ -162,6 +162,8 @@ function MsGraphForcePasswordResetAllUsers {
     }
     
     # Connect to Microsoft Graph API
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
     Connect-MgGraph -Scopes "User.Read.All", "User-PasswordProfile.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
     
     Write-Host "Would you like to exclude an account from this script? [y/n]"
@@ -214,6 +216,10 @@ function MsGraphForcePasswordResetSingleUser {
         Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
         Disconnect-MgGraph | Out-Null
     }
+
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+    
     Connect-MgGraph -Scopes "User.Read.All", "User-PasswordProfile.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
     Write-Host "Enter UPN of account to configure forced password change at next login (example@domain.com)"
         $UPN = Read-Host "UPN :"
@@ -234,6 +240,9 @@ function CreateMFAStatusReport {
         Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
         Disconnect-MgGraph | Out-Null
     }
+
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
 
     # Connect to Microsoft Graph API
     Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
