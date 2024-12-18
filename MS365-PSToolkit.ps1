@@ -102,7 +102,11 @@ function Format-Hyperlink {
   
     return "$Uri"
   }
-
+function CatchError {
+    Start-Sleep -Seconds 1
+    Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
 ####################################
 #  MsGraph  #
 #-------------
@@ -347,8 +351,12 @@ function CreateMFAStatusReport {
     $Report | Export-Csv -Path $Csvfile -NoTypeInformation -Encoding UTF8
 
     Write-Host "Script completed. Results exported to $Csvfile." -ForegroundColor Cyan
-
+    Start-Process $Csvfile
+    
     Disconnect-MgGraph | Out-Null
+
+    Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     
 }
 ####################################
@@ -468,19 +476,19 @@ while ($WhileLoopVarMainMenu -eq 1){
                 switch ($MsGraphMenuChoice) {
                     49 {try {installMicrosoftGraphModule}
                         catch {Write-Error "Error Running Module Installer"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     50 {try {CheckMsGraphDelegatedPermissions}
                         catch {Write-Error "Error Running Script"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     51 {try {MsGraphForcePasswordResetAllUsers}
                         catch {Write-Error "Error Running Script"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     52 {try {MsGraphForcePasswordResetSingleUser}
                         catch {Write-Error "Error Running Script"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     53 {try {CreateMFAStatusReport}
                         catch {Write-Error "Error Running Script"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     57 {
                         Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
                         $WhileLoopVarMsGraphMenu = 0}
@@ -517,10 +525,10 @@ while ($WhileLoopVarMainMenu -eq 1){
                 switch ($MsGraphMenuChoice) {
                     49 {try {installExchangeOnlineModule}
                         catch {Write-Error "Error Running Module Installer"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     50 {try {ExchangeOnlineConnection}
                         catch {Write-Error "Error while connecting"
-                            Start-Sleep -Seconds 1}}
+                            CatchError}}
                     51 {}
                     52 {}
                     53 {}
