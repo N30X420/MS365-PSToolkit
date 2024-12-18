@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.0"
+$version = "2.0.1"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
@@ -158,7 +158,7 @@ function MsGraphForcePasswordResetAllUsers {
     Write-Host "`nContinue ? [y/n]"
     $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     if ($continue.Character -eq "n"){
-        Exit
+        Break
     }
     
     # Connect to Microsoft Graph API
