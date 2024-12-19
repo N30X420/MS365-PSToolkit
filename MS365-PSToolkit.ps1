@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.0.1"
+$version = "2.1.0"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
@@ -11,7 +11,6 @@ $error.clear()
 $ProgressPreference = 'Continue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
 [console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
-$script:ExportCSV = $false
 #######################################
 
 
@@ -110,16 +109,19 @@ function CatchError {
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 }
 function PromptExportToCSV {
+    $script:ExportCSV = 0
     Write-Host "Export data to CSV ? [y/n]" -ForegroundColor Yellow
     $UserInput = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    If ($UserInput -eq "y"){
+    If ($UserInput.Character -eq "y"){
         Write-Host "Exporting Data" -ForegroundColor Yellow
-        $script:ExportCSV = $true
+        $script:ExportCSV = 1
     }
     else {
-        Start-Sleep -Seconds 1
         Break
     }
+}
+function DisplayBug {
+    Write-Warning "If no data is displayed rerun the command. CSV export does work even when no data is displayed."
 }
 
 ####################################
@@ -394,15 +396,16 @@ function Show-ExchangeOnlineMenu {
     Write-Host "$connectionStatus" -ForegroundColor $connectionStatusColor
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Exchange Online"
-    Write-Host "(3) - List Mailbox - Coming Soon" -ForegroundColor Red
+    Write-Host "(3) - List Mailbox"
     Write-Host "(4) - List Mailbox Permissions - Coming Soon" -ForegroundColor Red
     Write-Host "(5) - List Specific Mailbox Permissions - Coming Soon" -ForegroundColor Red
-    Write-Host "(6) - List Mailbox Size - Coming Soon" -ForegroundColor Red
+    Write-Host "(6) - List Mailbox Size"
     Write-Host "(7) - Open Tools Menu"
     Write-Host "(8) - Custom Command"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
+    Import-Module ExchangeOnlineManagement
 }
 function Show-ExchangeOnlineToolsMenu {
     Write-Host "######## Microsoft Exchange Online Tools Menu ########" -ForegroundColor DarkCyan
@@ -435,25 +438,44 @@ function ExchangeOnlineConnection {
         Disconnect-ExchangeOnline -Confirm:$false
     }
 }
-
 function ExchangeOnlineListMailbox {
-    Get-Recipient -ResultSize Unlimited -RecipientTypeDetails UserMailbox,SharedMailbox | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses
+    $ListMailbox=$null
+    $RecipientType='RoomMailbox', 'LinkedRoomMailbox', 'EquipmentMailbox', 'SchedulingMailbox', 
+        'LegacyMailbox', 'LinkedMailbox', 'UserMailbox', 'MailContact', 'DynamicDistributionGroup', 'MailForestContact', 'MailNonUniversalGroup', 'MailUniversalSecurityGroup', 
+        'RoomList', 'MailUser', 'GuestMailUser', 'GroupMailbox', 'PublicFolder', 'TeamMailbox', 'SharedMailbox', 'RemoteUserMailbox', 'RemoteRoomMailbox', 'RemoteEquipmentMailbox', 
+        'RemoteTeamMailbox', 'RemoteSharedMailbox', 'PublicFolderMailbox', 'SharedWithMailUser'
+    $ListMailbox = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails $RecipientType | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses | Format-List
+    Start-Sleep -Milliseconds 250
+    DisplayBug
+    Write-Host "####################################################" -ForegroundColor Green
+    Write-Output $ListMailbox
+    Write-Host "####################################################" -ForegroundColor Green
+    Start-Sleep -Seconds 3
     PromptExportToCSV
-    if ($script:ExportCSV -eq $true){
-        $RecipientType={'RoomMailbox', 'LinkedRoomMailbox', 'EquipmentMailbox', 'SchedulingMailbox', 
-        'LegacyMailbox', 'LinkedMailbox', 'UserMailbox', 'MailContact', 'DynamicDistributionGroup', 'MailForestContact', 'MailNonUniversalGroup', 'MailUniversalDistributionGroup', 'MailUniversalSecurityGroup', 
-        'RoomList', 'MailUser', 'GuestMailUser', 'GroupMailbox', 'DiscoveryMailbox', 'PublicFolder', 'TeamMailbox', 'SharedMailbox', 'RemoteUserMailbox', 'RemoteRoomMailbox', 'RemoteEquipmentMailbox', 
-        'RemoteTeamMailbox', 'RemoteSharedMailbox', 'PublicFolderMailbox', 'SharedWithMailUser'}
-
+    if ($script:ExportCSV -eq 1){
         $ExportResult=""   
         $ExportResults=@()  
-        $OutputCSV="$tempdir\Office365EmailAddressesReport_$((Get-Date -format yyyy-MMM-dd-ddd` hh-mm` tt).ToString()).csv"
-        $Count=0
+        $OutputCSV="$tempdir\Office365EmailAddressesReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
+        # Initialize progress counter
+        $counter = 0
+        $totalmailboxes = $ListMailbox.Count
         #Get all Email addresses in Microsoft 365
-        Get-Recipient -ResultSize Unlimited -RecipientTypeDetails $RecipientType | ForEach-Object {
-            $Count++
+        $ListMailbox = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails $RecipientType | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses
+        $ListMailbox | ForEach-Object {
+            $Counter++
+            # Calculate percentage completion
+            $percentComplete = [math]::Round(($counter / $totalmailboxes) * 100)
+
+            # Define progress bar parameters with user principal name
+            $progressParams = @{
+                Activity        = "Processing Mailboxes"
+                Status          = "Mailbox $($counter) of $totalMailboxes - $($Mailboxes.DisplayName) - $percentComplete% Complete"
+                PercentComplete = $percentComplete
+            }
+
+            Write-Progress @progressParams
+
             $DisplayName=$_.DisplayName
-            Write-Progress -Activity "`n     Retrieving email addresses of $DisplayName.."`n" Processed count: $Count"
             $RecipientTypeDetails=$_.RecipientTypeDetails
             $PrimarySMTPAddress=$_.PrimarySMTPAddress
             $Alias= ($_.EmailAddresses | Where-Object {$_ -clike "smtp:*"} | ForEach-Object {$_ -replace "smtp:",""}) -join ","
@@ -466,9 +488,78 @@ function ExchangeOnlineListMailbox {
             $ExportResult=@{'Display Name'=$DisplayName;'Recipient Type Details'=$RecipientTypeDetails;'Primary SMTP Address'=$PrimarySMTPAddress;'Alias'=$Alias}
             $ExportResults= New-Object PSObject -Property $ExportResult  
             $ExportResults | Select-Object 'Display Name','Recipient Type Details','Primary SMTP Address','Alias' | Export-Csv -Path $OutputCSV -Notype -Append
+            Start-Sleep -Milliseconds 100
         }
     }
+    # Clear progress bar
+    Write-Progress -Activity "Processing Users" -Completed
     Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
+}
+function ExchangeOnlineListMailboxSize {
+    $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MMM-dd-ddd` hh-mm` tt).ToString()).csv" 
+    $Result=""   
+    $Results=@()  
+    $MBCounter=0
+    $ListMailboxSize = get-mailbox -ResultSize Unlimited | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota | Format-Table
+    Start-Sleep -Milliseconds 250
+    DisplayBug
+    Write-Host "####################################################" -ForegroundColor Green
+    Write-Output $ListMailboxSize
+    Write-Host "####################################################" -ForegroundColor Green
+    Start-Sleep -Seconds 3
+    PromptExportToCSV
+    if ($script:ExportCSV -eq 1){
+        Get-Mailbox -ResultSize Unlimited | ForEach-Object {
+        $UPN=$_.UserPrincipalName
+        $Mailboxtype=$_.RecipientTypeDetails
+        $DisplayName=$_.DisplayName
+        $PrimarySMTPAddress=$_.PrimarySMTPAddress
+        $IssueWarningQuota=$_.IssueWarningQuota -replace "\(.*",""
+        $ProhibitSendQuota=$_.ProhibitSendQuota -replace "\(.*",""
+        $ProhibitSendReceiveQuota=$_.ProhibitSendReceiveQuota -replace "\(.*",""
+
+        $totalmailboxes = $ListMailboxSize.Count
+        #Get all Email addresses in Microsoft 365
+            $MBCounter++
+            # Calculate percentage completion
+            $percentComplete = [math]::Round(($MBcounter / $totalmailboxes) * 100)
+
+            # Define progress bar parameters with user principal name
+            $progressParams = @{
+                Activity        = "Processing Mailboxes"
+                Status          = "Mailbox $($MBcounter) of $totalMailboxes - $($Mailboxes.DisplayName) - $percentComplete% Complete"
+                PercentComplete = $percentComplete
+            }
+
+            Write-Progress @progressParams
+
+        if($SharedMBOnly.IsPresent -and ($Mailboxtype -ne "SharedMailbox")){
+            return }
+        if($UserMBOnly.IsPresent -and ($MailboxType -ne "UserMailbox")){
+            return}  
+        #Check for archive enabled mailbox
+        if(($null -eq $_.ArchiveDatabase) -and ($_.ArchiveDatabaseGuid -eq $_.ArchiveGuid)){
+            $ArchiveStatus = "Disabled"}
+        else{$ArchiveStatus= "Active"}
+
+        $Stats=Get-MailboxStatistics -Identity $UPN
+        $ItemCount=$Stats.ItemCount
+        $TotalItemSize=$Stats.TotalItemSize
+        $TotalItemSizeinBytes= $TotalItemSize –replace “(.*\()|,| [a-z]*\)”, “”
+        $TotalSize=$stats.TotalItemSize.value -replace "\(.*",""
+        $DeletedItemCount=$Stats.DeletedItemCount
+        $TotalDeletedItemSize=$Stats.TotalDeletedItemSize
+        
+        #Export result to csv
+        $Result=@{'Display Name'=$DisplayName;'User Principal Name'=$upn;'Mailbox Type'=$MailboxType;'Primary SMTP Address'=$PrimarySMTPAddress;'Archive Status'=$Archivestatus;'Item Count'=$ItemCount;'Total Size'=$TotalSize;'Total Size (Bytes)'=$TotalItemSizeinBytes;'Deleted Item Count'=$DeletedItemCount;'Deleted Item Size'=$TotalDeletedItemSize;'Issue Warning Quota'=$IssueWarningQuota;'Prohibit Send Quota'=$ProhibitSendQuota;'Prohibit send Receive Quota'=$ProhibitSendReceiveQuota}
+        $Results= New-Object PSObject -Property $Result  
+        $Results | Select-Object 'Display Name','User Principal Name','Mailbox Type','Primary SMTP Address','Item Count','Total Size','Total Size (Bytes)','Archive Status','Deleted Item Count','Deleted Item Size','Issue Warning Quota','Prohibit Send Quota','Prohibit Send Receive Quota' | Export-Csv -Path $OutputCSV -Notype -Append 
+
+        Start-Sleep -Milliseconds 100
+        }
+        Write-Progress -Activity "Processing Users" -Completed
+        Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
+    }
 }
 function ExchangeOnlineSaveSentItemsInSharedMailboxAll {
     $mailboxes = (get-mailbox -ResultSize Unlimited -RecipientTypeDetails Sharedmailbox)
@@ -501,16 +592,12 @@ function customExchangeCmd {
             $whileLoopVarCustomCmd = 0
         }
         else {
-            Invoke-Expression $ExchangeOnlineCustomCmd -Debug
+            Invoke-Expression $ExchangeOnlineCustomCmd
             Write-Host ""
         }       
     }    
 }
 ####################################
-
-
-
-
 
 
 
@@ -615,6 +702,9 @@ while ($WhileLoopVarMainMenu -eq 1){
                             CatchError}}
                     52 {}
                     53 {}
+                    54 {try {ExchangeOnlineListMailboxSize}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
                     55 {
                         $WhileLoopVarExchangeOnlineToolsMenu = 1
                         while ($WhileLoopVarExchangeOnlineToolsMenu -eq 1){
