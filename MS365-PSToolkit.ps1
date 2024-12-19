@@ -101,7 +101,7 @@ function Format-Hyperlink {
     }
   
     return "$Uri"
-  }
+}
 function CatchError {
     Start-Sleep -Seconds 1
     Write-Warning "Runtime Error"
@@ -397,8 +397,8 @@ function Show-ExchangeOnlineMenu {
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Exchange Online"
     Write-Host "(3) - List Mailbox"
-    Write-Host "(4) - List Mailbox Permissions - Coming Soon" -ForegroundColor Red
-    Write-Host "(5) - List Specific Mailbox Permissions - Coming Soon" -ForegroundColor Red
+    Write-Host "(4) - List Mailbox Permissions"
+    Write-Host "(5) - List Mailbox Permissions By User - Coming Soon" -ForegroundColor Red
     Write-Host "(6) - List Mailbox Size"
     Write-Host "(7) - Open Tools Menu"
     Write-Host "(8) - Custom Command"
@@ -444,7 +444,7 @@ function ExchangeOnlineListMailbox {
         'LegacyMailbox', 'LinkedMailbox', 'UserMailbox', 'MailContact', 'DynamicDistributionGroup', 'MailForestContact', 'MailNonUniversalGroup', 'MailUniversalSecurityGroup', 
         'RoomList', 'MailUser', 'GuestMailUser', 'GroupMailbox', 'PublicFolder', 'TeamMailbox', 'SharedMailbox', 'RemoteUserMailbox', 'RemoteRoomMailbox', 'RemoteEquipmentMailbox', 
         'RemoteTeamMailbox', 'RemoteSharedMailbox', 'PublicFolderMailbox', 'SharedWithMailUser'
-    $ListMailbox = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails $RecipientType | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses | Format-List
+    $ListMailbox = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails UserMailbox,SharedMailbox | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses | Sort-Object -Property DisplayName | Format-Table -AutoSize
     Start-Sleep -Milliseconds 250
     DisplayBug
     Write-Host "####################################################" -ForegroundColor Green
@@ -457,7 +457,7 @@ function ExchangeOnlineListMailbox {
         $ExportResults=@()  
         $OutputCSV="$tempdir\Office365EmailAddressesReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
         # Initialize progress counter
-        $counter = 0
+        $Counter = 0
         $totalmailboxes = $ListMailbox.Count
         #Get all Email addresses in Microsoft 365
         $ListMailbox = Get-Recipient -ResultSize Unlimited -RecipientTypeDetails $RecipientType | select-object Displayname,RecipientType,PrimarySMTPAddress,EmailAddresses
@@ -495,12 +495,98 @@ function ExchangeOnlineListMailbox {
     Write-Progress -Activity "Processing Users" -Completed
     Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
 }
+function ExchangeOnlineListPermissions {
+    $ListMailboxPermissions = Get-mailbox -RecipientTypeDetails UserMailbox,SharedMailbox -ResultSize Unlimited | Get-MailboxPermission | Sort-Object -Property Identity | where-object -Property User -NotMatch "NT AUTHORITY" | Format-Table identity, accessrights, User -AutoSize
+    Start-Sleep -Milliseconds 250
+    DisplayBug
+    Write-Host "####################################################" -ForegroundColor Green
+    Write-Output $ListMailboxPermissions
+    Write-Host "####################################################" -ForegroundColor Green
+    Start-Sleep -Seconds 3
+    PromptExportToCSV
+    if ($script:ExportCSV -eq 1){
+        $ExportCSV="$tempdir\SharedMBPermissionReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
+        $Result=""
+        $Results=@()
+        $Counter = 0
+        $ListMailbox = Get-mailbox -RecipientTypeDetails UserMailbox,SharedMailbox -ResultSize Unlimited
+        $totalmailboxes = $ListMailbox.Count
+        $ListMailbox | ForEach-Object{
+            $upn=$_.UserPrincipalName
+            $DisplayName=$_.Displayname
+            $PrimarySMTPAddress=$_.PrimarySMTPAddress
+            
+            $Counter++
+            # Calculate percentage completion
+            $percentComplete = [math]::Round(($Counter / $totalmailboxes) * 100)
+            # Define progress bar parameters with user principal name
+            $progressParams = @{
+                Activity        = "Processing Mailboxes"
+                Status          = "Mailbox $($counter) of $totalMailboxes - $($DisplayName) - $percentComplete% Complete"
+                PercentComplete = $percentComplete
+            }
+            Write-Progress @progressParams
+            
+            #Getting delegated Fullaccess permission for mailbox
+            $FullAccessPermissions=(Get-MailboxPermission -Identity $upn | Where-Object { ($_.AccessRights -contains "FullAccess") -and ($_.IsInherited -eq $false) -and -not ($_.User -match "NT AUTHORITY" -or $_.User -match "S-1-5-21") }).User
+            if([string]$FullAccessPermissions -ne ""){
+                $UserWithAccess=""
+                $AccessType="FullAccess"
+                foreach($FullAccessPermission in $FullAccessPermissions){
+                if($UserWithAccess -ne ""){
+                    $UserWithAccess=$UserWithAccess+","
+                }
+                $UserWithAccess=$UserWithAccess+$FullAccessPermission
+                }
+                $Result = @{'Display Name'=$_.Displayname;'User PrinciPal Name'=$upn;'Primary SMTP Address'=$PrimarySMTPAddress;'Access Type'=$AccessType;'User With Access'=$userwithAccess}
+                $Results = New-Object PSObject -Property $Result
+                $Results | select-object 'Display Name','User PrinciPal Name','Primary SMTP Address','Access Type','User With Access' | Export-Csv -Path $ExportCSV -Notype -Append
+            }
+            
+            #Getting delegated SendAs permission for mailbox
+            $SendAsPermissions=(Get-RecipientPermission -Identity $upn | Where-Object{ -not (($_.Trustee -match "NT AUTHORITY") -or ($_.Trustee -match "S-1-5-21"))}).Trustee
+            if([string]$SendAsPermissions -ne ""){
+                $UserWithAccess=""
+                $AccessType="SendAs"
+                foreach($SendAsPermission in $SendAsPermissions){
+                if($UserWithAccess -ne ""){
+                    $UserWithAccess=$UserWithAccess+","
+                }
+                $UserWithAccess=$UserWithAccess+$SendAsPermission
+                }
+                $Result = @{'Display Name'=$_.Displayname;'User PrinciPal Name'=$upn;'Primary SMTP Address'=$PrimarySMTPAddress;'Access Type'=$AccessType;'User With Access'=$userwithAccess}
+                $Results = New-Object PSObject -Property $Result
+                $Results |select-object 'Display Name','User PrinciPal Name','Primary SMTP Address','Access Type','User With Access' | Export-Csv -Path $ExportCSV -Notype -Append
+            }
+            
+            #Getting delegated SendOnBehalf permission for mailbox
+            $SendOnBehalfPermissions=$_.GrantSendOnBehalfTo
+            if([string]$SendOnBehalfPermissions -ne ""){
+                $UserWithAccess=""
+                $AccessType="SendOnBehalf"
+                foreach($SendOnBehalfPermissionDN in $SendOnBehalfPermissions){
+                if($UserWithAccess -ne ""){
+                    $UserWithAccess=$UserWithAccess+","
+                }
+                #$SendOnBehalfPermission=(Get-Mailbox -Identity $SendOnBehalfPermissionDN).UserPrincipalName
+                $UserWithAccess=$UserWithAccess+$SendOnBehalfPermissionDN
+            }
+                $Result = @{'Display Name'=$_.Displayname;'User PrinciPal Name'=$upn;'Primary SMTP Address'=$PrimarySMTPAddress;'Access Type'=$AccessType;'User With Access'=$userwithAccess}
+                $Results = New-Object PSObject -Property $Result
+                $Results |select-object 'Display Name','User PrinciPal Name','Primary SMTP Address','Access Type','User With Access' | Export-Csv -Path $ExportCSV -Notype -Append
+            }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    Write-Progress -Activity "Processing Mailboxes" -Completed
+    Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
+}
 function ExchangeOnlineListMailboxSize {
     $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MMM-dd-ddd` hh-mm` tt).ToString()).csv" 
     $Result=""   
     $Results=@()  
     $MBCounter=0
-    $ListMailboxSize = get-mailbox -ResultSize Unlimited | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota | Format-Table
+    $ListMailboxSize = get-mailbox -ResultSize Unlimited | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota | Format-Table -AutoSize
     Start-Sleep -Milliseconds 250
     DisplayBug
     Write-Host "####################################################" -ForegroundColor Green
@@ -527,7 +613,7 @@ function ExchangeOnlineListMailboxSize {
             # Define progress bar parameters with user principal name
             $progressParams = @{
                 Activity        = "Processing Mailboxes"
-                Status          = "Mailbox $($MBcounter) of $totalMailboxes - $($Mailboxes.DisplayName) - $percentComplete% Complete"
+                Status          = "Mailbox $($MBcounter) of $totalMailboxes - $($DisplayName) - $percentComplete% Complete"
                 PercentComplete = $percentComplete
             }
 
@@ -557,7 +643,7 @@ function ExchangeOnlineListMailboxSize {
 
         Start-Sleep -Milliseconds 100
         }
-        Write-Progress -Activity "Processing Users" -Completed
+        Write-Progress -Activity "Processing Mailboxes" -Completed
         Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
     }
 }
@@ -700,7 +786,9 @@ while ($WhileLoopVarMainMenu -eq 1){
                     51 {try {ExchangeOnlineListMailbox}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
-                    52 {}
+                    52 {try{ExchangeOnlineListPermissions}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
                     53 {}
                     54 {try {ExchangeOnlineListMailboxSize}
                         catch {Write-Error "Error Running Script"
