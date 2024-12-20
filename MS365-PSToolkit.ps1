@@ -398,7 +398,7 @@ function Show-ExchangeOnlineMenu {
     Write-Host "(2) - Connect / Disconnect Exchange Online"
     Write-Host "(3) - List Mailbox"
     Write-Host "(4) - List Mailbox Permissions"
-    Write-Host "(5) - List Mailbox Permissions By User - Coming Soon" -ForegroundColor Red
+    Write-Host "(5) - List Mailbox Permissions By User"
     Write-Host "(6) - List Mailbox Size"
     Write-Host "(7) - Open Tools Menu"
     Write-Host "(8) - Custom Command"
@@ -496,7 +496,7 @@ function ExchangeOnlineListMailbox {
     Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
 }
 function ExchangeOnlineListPermissions {
-    $ListMailboxPermissions = Get-mailbox -RecipientTypeDetails UserMailbox,SharedMailbox -ResultSize Unlimited | Get-MailboxPermission | Sort-Object -Property Identity | where-object -Property User -NotMatch "NT AUTHORITY" | Format-Table identity, accessrights, User -AutoSize
+    $ListMailboxPermissions = Get-mailbox -RecipientTypeDetails UserMailbox,SharedMailbox -ResultSize Unlimited | Get-MailboxPermission -ErrorAction SilentlyContinue | Sort-Object -Property Identity | where-object -Property User -NotMatch "NT AUTHORITY" | Format-Table identity, accessrights, User -AutoSize
     Start-Sleep -Milliseconds 250
     DisplayBug
     Write-Host "####################################################" -ForegroundColor Green
@@ -581,12 +581,23 @@ function ExchangeOnlineListPermissions {
     Write-Progress -Activity "Processing Mailboxes" -Completed
     Write-Host "Script completed. Results exported to  $OutputCSV." -ForegroundColor Cyan
 }
+function ExchangeOnlineListPermissionsByUser {
+    Write-Host "Enter email address to check FullAccess rights" -ForegroundColor Yellow
+    $ExchangeUser = Read-Host "Username"
+    DisplayBug
+    Write-Host "####################################################" -ForegroundColor Green
+    Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $ExchangeUser -ErrorAction SilentlyContinue | Sort-Object -Property Identity | format-table Identity ,AccessRights, User -AutoSize
+    Write-Host "####################################################" -ForegroundColor Green
+    Write-Host "`nPress any key to return to the menu..." -ForegroundColor Cyan
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+
+}
 function ExchangeOnlineListMailboxSize {
     $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MMM-dd-ddd` hh-mm` tt).ToString()).csv" 
     $Result=""   
     $Results=@()  
     $MBCounter=0
-    $ListMailboxSize = get-mailbox -ResultSize Unlimited | Get-MailboxStatistics | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota | Format-Table -AutoSize
+    $ListMailboxSize = get-mailbox -ResultSize Unlimited | Get-MailboxStatistics -ErrorAction SilentlyContinue | Select-Object DisplayName, MailboxTypeDetail, ItemCount, TotalItemSize, SystemMessageSizeShutoffQuota | Format-Table -AutoSize
     Start-Sleep -Milliseconds 250
     DisplayBug
     Write-Host "####################################################" -ForegroundColor Green
@@ -789,7 +800,9 @@ while ($WhileLoopVarMainMenu -eq 1){
                     52 {try{ExchangeOnlineListPermissions}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
-                    53 {}
+                    53 {try{ExchangeOnlineListPermissionsByUser}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
                     54 {try {ExchangeOnlineListMailboxSize}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
