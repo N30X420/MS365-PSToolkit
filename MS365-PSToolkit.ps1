@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.1.0"
+$version = "2.2.0"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
@@ -33,7 +33,7 @@ function Show-MainMenu {
     Write-Host "Select Microsoft 365 Service To Connect With"
     Write-Host "`n(1) - Microsoft Graph"
     Write-Host "(2) - Exchange Online"
-    Write-Host "(3) - Sharepoint Online - Coming Soon" -ForegroundColor Red
+    Write-Host "(3) - Sharepoint Online"
     Write-Host "`n(8) - Check For Updates"
     Write-Host "(9) - Exit"
     Write-Host "###############################################" -ForegroundColor DarkCyan
@@ -120,6 +120,10 @@ function PromptExportToCSV {
         Break
     }
 }
+function PromptPressKeyToContinue {
+    Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+}
 function DisplayBug {
     Write-Warning "If no data is displayed rerun the command. CSV export does work even when no data is displayed."
 }
@@ -134,6 +138,7 @@ function Show-MsGraphMenu {
     Write-Host "(3) - Tool - Forced password change at next login - all users"
     Write-Host "(4) - Tool - Forced password change at next login - single user"
     Write-Host "(5) - Report - Create MFA status report"
+    Write-Host "(8) - Tool - Remove obsolete MS365-PSToolkit entra applications"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
@@ -143,7 +148,7 @@ function installMicrosoftGraphModule {
         Write-Warning "Module Microsoft.Graph not installed"
         Write-Host "Installing Microsoft.Graph Please Wait" -ForegroundColor Green
         Install-Module Microsoft.Graph -Scope CurrentUser -Force
-        Install-Module Microsoft.Graph.Beta -Scope CurrentUser -Force
+        Install-Module Microsoft.Graph.Beta -Scope CurrentUser -Force -Confirm:$false
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Already Installed" -ForegroundColor Green
@@ -250,6 +255,44 @@ function MsGraphForcePasswordResetSingleUser {
         Write-Warning "Error updating $($UMSAccount.UserPrincipalName)"
     }
     Disconnect-MgGraph | Out-Null
+}
+function MsGraphRemoveObsoleteMS365ToolKitEntraApplication {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    #Disconnect from the Microsoft Graph If already connected
+    if (Get-MgContext) {
+        Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
+        Disconnect-MgGraph | Out-Null
+    }
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+    
+    Connect-MgGraph -Scopes "Application.ReadWrite.All" -NoWelcome
+
+    Write-Warning "This script will remove any obsolete MS365-PSToolkit Application in Microsoft Entra"
+    Write-Host "`nContinue ? [y/n]"
+    $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if ($continue.Character -ine "y"){
+        Break
+    }
+    $EntraApplication = Get-MgApplication | Where-Object -Property DisplayName -Match "PnP-MS365*"
+    $counter = 0
+    $totalApps = $EntraApplication.Count
+    foreach ($ID in $EntraApplication.Id){
+        $counter++
+        $percentComplete = [math]::Round(($counter / $totalApps) * 100)
+
+        $progressParams = @{
+            Activity        = "Processing Applications"
+            Status          = "Application $($counter) of $totalApps - $($EntraApplication.DisplayName) - $percentComplete% Complete"
+            PercentComplete = $percentComplete
+        }
+
+        Write-Progress @progressParams
+        Remove-MgApplication -ApplicationId $ID
+        Start-Sleep -Seconds 1
+    }
+    Write-Progress -Activity "Processing Applications" -Completed
 }
 function CreateMFAStatusReport {
     #Disconnect from the Microsoft Graph If already connected
@@ -381,8 +424,7 @@ function CreateMFAStatusReport {
     
     Disconnect-MgGraph | Out-Null
 
-    Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    PromptPressKeyToContinue
     
 }
 ####################################
@@ -393,7 +435,7 @@ function CreateMFAStatusReport {
 function Show-ExchangeOnlineMenu {
     Write-Host "######## Microsoft Exchange Online Menu ########" -ForegroundColor DarkCyan
     Write-Host "Exchange Online Connection : " -NoNewline -ForegroundColor Yellow
-    Write-Host "$connectionStatus" -ForegroundColor $connectionStatusColor
+    Write-Host "$ExchangeOnlineConnectionStatus" -ForegroundColor $ExchangeOnlineConnectionStatusColor
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Exchange Online"
     Write-Host "(3) - List Mailbox"
@@ -405,12 +447,12 @@ function Show-ExchangeOnlineMenu {
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
-    Import-Module ExchangeOnlineManagement
+    Import-Module ExchangeOnlineManagement -ErrorAction SilentlyContinue
 }
 function Show-ExchangeOnlineToolsMenu {
     Write-Host "######## Microsoft Exchange Online Tools Menu ########" -ForegroundColor DarkCyan
     Write-Host "Exchange Online Connection : " -NoNewline -ForegroundColor Yellow
-    Write-Host "$connectionStatus" -ForegroundColor $connectionStatusColor
+    Write-Host "$ExchangeOnlineConnectionStatus" -ForegroundColor $ExchangeOnlineConnectionStatusColor
     Write-Host "`n(1) - Enable Delegate Sent Items Shared Mailbox"
     Write-Host "`n(9) - Return to Exchange Online Menu"
     Write-Host "#####################################################" -ForegroundColor DarkCyan
@@ -420,15 +462,15 @@ function installExchangeOnlineModule {
     if(-not (Get-Module ExchangeOnlineManagement -ListAvailable)){
         Write-Warning "Module ExchangeOnlineManagement not installed"
         Write-Host "Installing ExchangeOnlineManagement Please Wait" -ForegroundColor Green
-        Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force 
+        Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -Confirm:$false
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Already Installed" -ForegroundColor Green
     Start-Sleep -Seconds 2
 }
 function ExchangeOnlineConnection {
-    $Connection = Get-ConnectionInformation
-    If (-Not ( $Connection.State -match 'Connected' ) ){
+    $ExchangeOnlineConnection = Get-ConnectionInformation
+    If (-Not ( $ExchangeOnlineConnection.State -match 'Connected' ) ){
         Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
         Connect-ExchangeOnline -ShowBanner:$False
     }
@@ -588,12 +630,11 @@ function ExchangeOnlineListPermissionsByUser {
     Write-Host "####################################################" -ForegroundColor Green
     Get-Mailbox -ResultSize Unlimited | Get-MailboxPermission -User $ExchangeUser -ErrorAction SilentlyContinue | Sort-Object -Property Identity | format-table Identity ,AccessRights, User -AutoSize
     Write-Host "####################################################" -ForegroundColor Green
-    Write-Host "`nPress any key to return to the menu..." -ForegroundColor Cyan
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    PromptPressKeyToContinue
 
 }
 function ExchangeOnlineListMailboxSize {
-    $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MMM-dd-ddd` hh-mm` tt).ToString()).csv" 
+    $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv" 
     $Result=""   
     $Results=@()  
     $MBCounter=0
@@ -696,7 +737,58 @@ function customExchangeCmd {
 }
 ####################################
 
+####################################
+#  Sharepoint Online  #
+#-----------------------
+function Show-SharePointOnlineMenu {
+    Write-Host "######## Microsoft SharePoint Online Menu ########" -ForegroundColor DarkCyan
+    Write-Host "SharePoint Online Connection : " -NoNewline -ForegroundColor Yellow
+    Write-Host "$SharePointConnectionStatus" -ForegroundColor $SharePointConnectionStatusColor
+    Write-Host "`n(1) - Install Required Modules"
+    Write-Host "(2) - Connect / Disconnect Sharepoint Online"
+    Write-Host "(3) - List SharePoint Sites"
+    Write-Host "(8) - Custom Command - Coming Soon" -ForegroundColor Red
+    Write-Host "`n(9) - Main Menu"
+    Write-Host "################################################" -ForegroundColor DarkCyan
+    Write-Host ""
+    Import-Module PnP.PowerShell -ErrorAction SilentlyContinue
+}
+function installSharepointOnlineModule {
+    if(-not (Get-Module PnP.PowerShell -ListAvailable)){
+        Write-Warning "PnP.PowerShell not installed"
+        Write-Host "PnP.PowerShell Please Wait" -ForegroundColor Green
+        Install-Module PnP.PowerShell -Scope CurrentUser -Force -Confirm:$false
+        }
+    Start-Sleep -Seconds 1
+    Write-Host "Module Already Installed" -ForegroundColor Green
+    Start-Sleep -Seconds 2
+}
+function SharePointOnlineConnection {
+    try{ Get-PnPConnection | Out-Null
+        Write-Host "Disconnecting Microsoft 365 - PnP Online" -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        Disconnect-PnPOnline
+    }
+    catch {
+        Write-Host "Connecting to Microsoft 365 - PnP Online" -ForegroundColor Yellow
+        Write-Host "Enter Organisation Name (First part of xxxx.onmicrosoft.com)"
+        $OrgName = Read-Host "Name"
+        $ClientID = Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP-MS365-PSToolkit-$((Get-Date -format yyyyMMddhhmm).ToString())" -Tenant "$OrgName.onmicrosoft.com" -Interactive -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+        Connect-PnPOnline -url "$OrgName.sharepoint.com" -Interactive -ClientId $clientID."AzureAppId/ClientId"
+    }
+    
+}
+function SharePointOnlineListSites {
+    $ListSharePointSites = Get-PnPTenantSite | Format-Table url,status,archivestatus -autosize
+    Start-Sleep -Milliseconds 250
+    DisplayBug
+    Write-Host "####################################################" -ForegroundColor Green
+    Write-Output $ListSharePointSites
+    Write-Host "####################################################" -ForegroundColor Green
+    PromptPressKeyToContinue
+}
 
+####################################
 
 #####################################################################
 # Main Code --- Main Code --- Main Code --- Main Code --- Main Code #
@@ -715,6 +807,7 @@ CheckPowershellVersion
 CheckAdminPrivs
 if (!(Test-Path $tempdir)) {New-Item -itemType Directory -Path $tempdir | Out-Null}
 CheckForUpdates
+Get-MgApplication -ErrorAction SilentlyContinue | Out-Null
 ######################
 
 ##############
@@ -754,6 +847,10 @@ while ($WhileLoopVarMainMenu -eq 1){
                     53 {try {CreateMFAStatusReport}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
+                    55 {MsGraphRemoveObsoleteMS365ToolKitEntraApplication}
+                    56 {try {MsGraphRemoveObsoleteMS365ToolKitEntraApplication}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
                     57 {
                         Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
                         $WhileLoopVarMsGraphMenu = 0}
@@ -772,17 +869,17 @@ while ($WhileLoopVarMainMenu -eq 1){
                 Start-Sleep -Milliseconds 250
                 Logo
                 Start-Sleep -Milliseconds 250
-                $connectionStatus = "Disconnected"
-                $connectionStatusColor = "Red"
+                $ExchangeOnlineConnectionStatus = "Disconnected"
+                $ExchangeOnlineConnectionStatusColor = "Red"
                 if (Get-Module ExchangeOnlineManagement -ListAvailable){
                     $ExchangeOnlineConnectionState = Get-ConnectionInformation
                     If ( $ExchangeOnlineConnectionState.State -match 'Connected' ){
-                        $connectionStatus = "Connected"
-                        $connectionStatusColor = "Green"
+                        $ExchangeOnlineConnectionStatus = "Connected"
+                        $ExchangeOnlineConnectionStatusColor = "Green"
                     }
                     else {
-                        $connectionStatus = "Disconnected"
-                        $connectionStatusColor = "Red"
+                        $ExchangeOnlineConnectionStatus = "Disconnected"
+                        $ExchangeOnlineConnectionStatusColor = "Red"
                     }
                 }
                 Show-ExchangeOnlineMenu
@@ -835,7 +932,54 @@ while ($WhileLoopVarMainMenu -eq 1){
                 }
             }
         }
-        51 {Write-Host "3"}
+
+        51 {$WhileLoopVarSharepointMenu = 1
+            while ($WhileLoopVarSharepointMenu -eq 1){
+                Clear-Host
+                Start-Sleep -Milliseconds 250
+                Logo
+                Start-Sleep -Milliseconds 250
+                $SharePointConnectionStatus = "Disconnected"
+                $SharePointConnectionStatusColor = "Red"
+                if (Get-Module PnP.Powershell -ListAvailable){
+                    try{ Get-PnPConnection | Out-Null
+                        $SharePointConnectionStatus = "Connected"
+                        $SharePointConnectionStatusColor = "Green" 
+                    }
+                    
+                    catch {
+                        $SharePointConnectionStatus = "Disconnected"
+                        $SharePointConnectionStatusColor = "Red"
+                    }
+                }
+                Show-SharepointOnlineMenu
+                $SharepointMenuChoice = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").VirtualKeyCode
+                switch ($SharepointMenuChoice) {
+                    49 {try {installSharepointOnlineModule}
+                        catch {Write-Error "Error Running Module Installer"
+                            CatchError}}
+                    50 {try {SharePointOnlineConnection}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
+                    51 {try {SharePointOnlineListSites}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
+                    52 {try {}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
+                    53 {try {}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
+                    56 {}
+                    57 {
+                        Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
+                        $WhileLoopVarSharepointMenu = 0}
+                        
+                        default {Write-Host "`nInvalid selection, please try again." -ForegroundColor Red
+                            Start-Sleep -Seconds 1}
+                }
+            }
+        }
         56 {CheckForUpdates}
         57 {
             Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
