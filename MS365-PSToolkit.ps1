@@ -1,10 +1,11 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.2.0"
+$version = "2.2.1"
 $ProgramName = "MS365-PSToolkit"
 $tempdir = "C:\INSTALL\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
+$ErrorLog = "$tempdir\error.log"
 #######################################
 #######################################
 $error.clear()
@@ -12,7 +13,6 @@ $ProgressPreference = 'Continue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
 [console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
 #######################################
-
 
 function Logo {
     Write-Host " "
@@ -40,8 +40,13 @@ function Show-MainMenu {
     Write-Host ""
 }
 function CheckPowershellVersion {
-    if ($PSVersionTable.PSVersion.Major -ne 7){
-        Write-Warning "This program requires powershell 7. You are running version $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor) Please Update to Powershell 7.x"
+    try {
+        if ($PSVersionTable.PSVersion.Major -ne 7) {
+            throw "This program requires PowerShell 7. You are running version $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor). Please update to PowerShell 7.x"
+        }
+    } catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Warning $_.Exception.Message
         exit
     }
 }
@@ -50,13 +55,12 @@ function CheckAdminPrivs {
         # Returns true/false
         ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
     }
+    try {
         if (isadmin -eq "True") {
             Write-Host "`nGot Administrator Permissions" -ForegroundColor Green
             Start-Sleep -Seconds 1
-        }
-        else {
-            Write-Error "This script needs Administrator Privileges to work it's magic"
-            Start-Sleep -Seconds 3
+        } else {
+            throw "This script needs Administrator Privileges to work its magic"
         }
         if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
             if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) {
@@ -65,6 +69,12 @@ function CheckAdminPrivs {
                 Exit
             }
         }
+    } catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Error $_.Exception.Message
+        Start-Sleep -Seconds 3
+        exit
+    }
 }
 function CheckForUpdates {
     try {
@@ -72,8 +82,12 @@ function CheckForUpdates {
 		$ReleaseInfo = ($Releases | Sort-Object id -desc)[0]
 		$LatestVersion = [version[]]$ReleaseInfo.Name.Trim('v')
 		if ($LatestVersion -gt $version){ $Script:NewVersionAvailable = "v$LatestVersion is available $(Format-Hyperlink -Uri "$GithubRepo" -Label "v$LatestVersion")"}
+        else {
+            Write-Host "You are running the latest version - v$version" -ForegroundColor Green
+            Start-Sleep -Seconds 2} 
     }
     catch {
+        Write-ErrorLog $_.Exception.Message
         Write-Warning "Error while checking for updates"
         Start-Sleep -Seconds 2
     }
@@ -104,9 +118,18 @@ function Format-Hyperlink {
 }
 function CatchError {
     Start-Sleep -Seconds 1
-    Write-Warning "Runtime Error"
+    Write-Error "Runtime Error: $($_.Exception.Message)"
     Write-Host -NoNewLine "Press any key to return to the menu..." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    Write-ErrorLog "Runtime Error: $($_.Exception.Message)"
+}
+function Write-ErrorLog {
+    param (
+        [string]$Message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $Message"
+    Add-Content -Path $ErrorLog -Value $logMessage
 }
 function PromptExportToCSV {
     $script:ExportCSV = 0
@@ -168,69 +191,71 @@ function CheckMsGraphDelegatedPermissions {
     }
 }
 function MsGraphForcePasswordResetAllUsers {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-    #Disconnect from the Microsoft Graph If already connected
-    if (Get-MgContext) {
-        Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
-        Disconnect-MgGraph | Out-Null
-    }
-    
-    Write-Warning "This script will force every account to change password at next sign in."
-    Write-Host "`nContinue ? [y/n]"
-    $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    if ($continue.Character -ine "y"){
-        Break
-    }
-    
-    # Connect to Microsoft Graph API
-    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
-    Start-Sleep -Seconds 2
-    Connect-MgGraph -Scopes "User.Read.All", "User-PasswordProfile.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
-    
-    Write-Host "Would you like to exclude an account from this script? [y/n]"
-    $exclude = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    if ($exclude.Character -eq "y"){
-        Write-Host "Enter UPN of account to exclude (example@domain.com)"
-        $excludedUPN = Read-Host "UPN :"
-        $excludedAccount = Get-MgBetaUser -UserId $excludedUPN
-    }
-    
-    
-    # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
-    $users = Get-MgBetaUser -All
-    
-    # Initialize progress counter
-    $counter = 0
-    $totalUsers = $users.Count
-    
-    # Loop through each user account
-    foreach ($user in $users) {
-        if ($user.Id -eq $excludedAccount.Id){continue} 
-        $counter++
-    
-        # Calculate percentage completion
-        $percentComplete = [math]::Round(($counter / $totalUsers) * 100)
-    
-        # Define progress bar parameters with user principal name
-        $progressParams = @{
-            Activity        = "Processing Users"
-            Status          = "User $($counter) of $totalUsers - $($user.UserPrincipalName) - $percentComplete% Complete"
-            PercentComplete = $percentComplete
+        # Disconnect from the Microsoft Graph If already connected
+        if (Get-MgContext) {
+            Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
+            Disconnect-MgGraph | Out-Null
         }
-    
-        Write-Progress @progressParams
-        try {
-            Update-MgUser -UserId $user.id -PasswordProfile @{ ForceChangePasswordNextSignIn=$true}
+
+        Write-Warning "This script will force every account to change password at next sign in."
+        Write-Host "`nContinue ? [y/n]"
+        $continue = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        if ($continue.Character -ine "y") {
+            Break
         }
-        catch {
-            Write-Warning "Error updating $($User.UserPrincipalName)"
+
+        # Connect to Microsoft Graph API
+        Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        Connect-MgGraph -Scopes "User.Read.All", "User-PasswordProfile.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
+
+        Write-Host "Would you like to exclude an account from this script? [y/n]"
+        $exclude = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        if ($exclude.Character -eq "y") {
+            Write-Host "Enter UPN of account to exclude (example@domain.com)"
+            $excludedUPN = Read-Host "UPN :"
+            $excludedAccount = Get-MgBetaUser -UserId $excludedUPN
         }
-        
+
+        # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
+        $users = Get-MgBetaUser -All
+
+        # Initialize progress counter
+        $counter = 0
+        $totalUsers = $users.Count
+
+        # Loop through each user account
+        foreach ($user in $users) {
+            if ($user.Id -eq $excludedAccount.Id) { continue }
+            $counter++
+
+            # Calculate percentage completion
+            $percentComplete = [math]::Round(($counter / $totalUsers) * 100)
+
+            # Define progress bar parameters with user principal name
+            $progressParams = @{
+                Activity        = "Processing Users"
+                Status          = "User $($counter) of $totalUsers - $($user.UserPrincipalName) - $percentComplete% Complete"
+                PercentComplete = $percentComplete
+            }
+
+            Write-Progress @progressParams
+            try {
+                Update-MgUser -UserId $user.id -PasswordProfile @{ ForceChangePasswordNextSignIn = $true }
+            } catch {
+                Write-ErrorLog "Error updating $($user.UserPrincipalName): $_.Exception.Message"
+                Write-Warning "Error updating $($user.UserPrincipalName)"
+            }
+        }
+        # Clear progress bar
+        Write-Progress -Activity "Processing Users" -Completed
+    } catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Error $_.Exception.Message
     }
-    # Clear progress bar
-    Write-Progress -Activity "Processing Users" -Completed
-    
 }
 function MsGraphForcePasswordResetSingleUser {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -295,137 +320,139 @@ function MsGraphRemoveObsoleteMS365ToolKitEntraApplication {
     Write-Progress -Activity "Processing Applications" -Completed
 }
 function CreateMFAStatusReport {
-    #Disconnect from the Microsoft Graph If already connected
-    if (Get-MgContext) {
-        Write-Host Disconnecting from the previous sesssion.... -ForegroundColor Yellow
+    try {
+        # Disconnect from the Microsoft Graph If already connected
+        if (Get-MgContext) {
+            Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
+            Disconnect-MgGraph | Out-Null
+        }
+
+        Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+
+        # Connect to Microsoft Graph API
+        Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
+
+        # Create variable for the date stamp
+        $LogDate = Get-Date -f yyyyMMddhhmm
+
+        # Define CSV file export location variable
+        $Csvfile = "$tempdir\MFAUsers_$LogDate.csv"
+
+        # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
+        $users = Get-MgBetaUser -All
+
+        # Initialize a List to store the data
+        $Report = [System.Collections.Generic.List[Object]]::new()
+
+        # Initialize progress counter
+        $counter = 0
+        $totalUsers = $users.Count
+
+        # Loop through each user account
+        foreach ($user in $users) {
+            $counter++
+
+            # Calculate percentage completion
+            $percentComplete = [math]::Round(($counter / $totalUsers) * 100)
+
+            # Define progress bar parameters with user principal name
+            $progressParams = @{
+                Activity        = "Processing Users"
+                Status          = "User $($counter) of $totalUsers - $($user.UserPrincipalName) - $percentComplete% Complete"
+                PercentComplete = $percentComplete
+            }
+
+            Write-Progress @progressParams
+
+            # Create an object to store user MFA information
+            $ReportLine = [PSCustomObject]@{
+                DisplayName               = "-"
+                UserPrincipalName         = "-"
+                MFAstatus                 = "Disabled"
+                DefaultMFAMethod          = "-"
+                Email                     = "-"
+                Fido2                     = "-"
+                MicrosoftAuthenticatorApp = "-"
+                Phone                     = "-"
+                SoftwareOath              = "-"
+                TemporaryAccessPass       = "-"
+                WindowsHelloForBusiness   = "-"
+            }
+
+            $ReportLine.UserPrincipalName = $user.UserPrincipalName
+            $ReportLine.DisplayName = $user.DisplayName
+
+            # Check authentication methods for each user
+            $MFAData = Get-MgBetaUserAuthenticationMethod -UserId $user.Id
+
+            # Retrieve the default MFA method
+            $DefaultMFAUri = "https://graph.microsoft.com/beta/users/$($user.Id)/authentication/signInPreferences"
+            try {
+                $DefaultMFAMethod = Invoke-MgGraphRequest -Uri $DefaultMFAUri -Method GET
+                if ($DefaultMFAMethod.userPreferredMethodForSecondaryAuthentication) {
+                    $ReportLine.DefaultMFAMethod = $DefaultMFAMethod.userPreferredMethodForSecondaryAuthentication
+                } else {
+                    $ReportLine.DefaultMFAMethod = "Not set"
+                }
+            } catch {
+                Write-ErrorLog "Failed to retrieve default MFA method for $($user.UserPrincipalName): $_.Exception.Message"
+                Write-Warning "Failed to retrieve default MFA method for $($user.UserPrincipalName)"
+                $ReportLine.DefaultMFAMethod = "Error"
+            }
+
+            foreach ($method in $MFAData) {
+                Switch ($method.AdditionalProperties["@odata.type"]) {
+                    "#microsoft.graph.emailAuthenticationMethod" {
+                        $ReportLine.Email = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.fido2AuthenticationMethod" {
+                        $ReportLine.Fido2 = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+                        $ReportLine.MicrosoftAuthenticatorApp = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.phoneAuthenticationMethod" {
+                        $ReportLine.Phone = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.softwareOathAuthenticationMethod" {
+                        $ReportLine.SoftwareOath = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+                        $ReportLine.TemporaryAccessPass = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                    "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+                        $ReportLine.WindowsHelloForBusiness = $true
+                        $ReportLine.MFAstatus = "Enabled"
+                    }
+                }
+            }
+            # Add the report line to the List
+            $Report.Add($ReportLine)
+        }
+
+        # Clear progress bar
+        Write-Progress -Activity "Processing Users" -Completed
+
+        # Export user information to CSV
+        $Report | Export-Csv -Path $Csvfile -NoTypeInformation -Encoding UTF8
+
+        Write-Host "Script completed. Results exported to $Csvfile." -ForegroundColor Cyan
+        Start-Process $Csvfile
+
         Disconnect-MgGraph | Out-Null
+
+        PromptPressKeyToContinue
+    } catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Error $_.Exception.Message
     }
-
-    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
-    Start-Sleep -Seconds 2
-
-    # Connect to Microsoft Graph API
-    Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All", "UserAuthenticationMethod.ReadWrite.All" -NoWelcome
-
-    # Create variable for the date stamp
-    $LogDate = Get-Date -f yyyyMMddhhmm
-
-    # Define CSV file export location variable
-    $Csvfile = "$tempdir\MFAUsers_$LogDate.csv"
-
-    # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
-    $users = Get-MgBetaUser -All
-
-    # Initialize a List to store the data
-    $Report = [System.Collections.Generic.List[Object]]::new()
-
-    # Initialize progress counter
-    $counter = 0
-    $totalUsers = $users.Count
-
-    # Loop through each user account
-    foreach ($user in $users) {
-        $counter++
-
-        # Calculate percentage completion
-        $percentComplete = [math]::Round(($counter / $totalUsers) * 100)
-
-        # Define progress bar parameters with user principal name
-        $progressParams = @{
-            Activity        = "Processing Users"
-            Status          = "User $($counter) of $totalUsers - $($user.UserPrincipalName) - $percentComplete% Complete"
-            PercentComplete = $percentComplete
-        }
-
-        Write-Progress @progressParams
-
-        # Create an object to store user MFA information
-        $ReportLine = [PSCustomObject]@{
-            DisplayName               = "-"
-            UserPrincipalName         = "-"
-            MFAstatus                 = "Disabled"
-            DefaultMFAMethod          = "-"
-            Email                     = "-"
-            Fido2                     = "-"
-            MicrosoftAuthenticatorApp = "-"
-            Phone                     = "-"
-            SoftwareOath              = "-"
-            TemporaryAccessPass       = "-"
-            WindowsHelloForBusiness   = "-"
-        }
-
-        $ReportLine.UserPrincipalName = $user.UserPrincipalName
-        $ReportLine.DisplayName = $user.DisplayName
-
-        # Check authentication methods for each user
-        $MFAData = Get-MgBetaUserAuthenticationMethod -UserId $user.Id
-
-        # Retrieve the default MFA method
-        $DefaultMFAUri = "https://graph.microsoft.com/beta/users/$($user.Id)/authentication/signInPreferences"
-        try {
-            $DefaultMFAMethod = Invoke-MgGraphRequest -Uri $DefaultMFAUri -Method GET
-            if ($DefaultMFAMethod.userPreferredMethodForSecondaryAuthentication) {
-                $ReportLine.DefaultMFAMethod = $DefaultMFAMethod.userPreferredMethodForSecondaryAuthentication
-            }
-            else {
-                $ReportLine.DefaultMFAMethod = "Not set"
-            }
-        }
-        catch {
-            Write-Warning "Failed to retrieve default MFA method for $($user.UserPrincipalName): $_"
-            $ReportLine.DefaultMFAMethod = "Error"
-        }
-
-        foreach ($method in $MFAData) {
-
-            Switch ($method.AdditionalProperties["@odata.type"]) {
-                "#microsoft.graph.emailAuthenticationMethod" {
-                    $ReportLine.Email = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.fido2AuthenticationMethod" {
-                    $ReportLine.Fido2 = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
-                    $ReportLine.MicrosoftAuthenticatorApp = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.phoneAuthenticationMethod" {
-                    $ReportLine.Phone = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.softwareOathAuthenticationMethod" {
-                    $ReportLine.SoftwareOath = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
-                    $ReportLine.TemporaryAccessPass = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-                "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
-                    $ReportLine.WindowsHelloForBusiness = $true
-                    $ReportLine.MFAstatus = "Enabled"
-                }
-            }
-        }
-        # Add the report line to the List
-        $Report.Add($ReportLine)
-    }
-
-    # Clear progress bar
-    Write-Progress -Activity "Processing Users" -Completed
-
-    # Export user information to CSV
-    $Report | Export-Csv -Path $Csvfile -NoTypeInformation -Encoding UTF8
-
-    Write-Host "Script completed. Results exported to $Csvfile." -ForegroundColor Cyan
-    Start-Process $Csvfile
-    
-    Disconnect-MgGraph | Out-Null
-
-    PromptPressKeyToContinue
-    
 }
 ####################################
 
@@ -469,15 +496,19 @@ function installExchangeOnlineModule {
     Start-Sleep -Seconds 2
 }
 function ExchangeOnlineConnection {
-    $ExchangeOnlineConnection = Get-ConnectionInformation
-    If (-Not ( $ExchangeOnlineConnection.State -match 'Connected' ) ){
-        Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
-        Connect-ExchangeOnline -ShowBanner:$False
-    }
-    else {
-        Write-Host "Disconnecting Microsoft 365 - Exchange Online" -ForegroundColor Yellow
-        Start-Sleep -Seconds 2
-        Disconnect-ExchangeOnline -Confirm:$false
+    try {
+        $ExchangeOnlineConnection = Get-ConnectionInformation
+        If (-Not ($ExchangeOnlineConnection.State -match 'Connected')) {
+            Write-Host "Connecting to Microsoft 365 - Exchange Online" -ForegroundColor Yellow
+            Connect-ExchangeOnline -ShowBanner:$False
+        } else {
+            Write-Host "Disconnecting Microsoft 365 - Exchange Online" -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+            Disconnect-ExchangeOnline -Confirm:$false
+        }
+    } catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Error $_.Exception.Message
     }
 }
 function ExchangeOnlineListMailbox {
@@ -511,7 +542,7 @@ function ExchangeOnlineListMailbox {
             # Define progress bar parameters with user principal name
             $progressParams = @{
                 Activity        = "Processing Mailboxes"
-                Status          = "Mailbox $($counter) of $totalMailboxes - $($Mailboxes.DisplayName) - $percentComplete% Complete"
+                Status          = "Mailbox $($counter) of $totalMailboxes - $($_.Displayname) - $percentComplete% Complete"
                 PercentComplete = $percentComplete
             }
 
@@ -764,19 +795,19 @@ function installSharepointOnlineModule {
     Start-Sleep -Seconds 2
 }
 function SharePointOnlineConnection {
-    try{ Get-PnPConnection | Out-Null
+    try {
+        Get-PnPConnection | Out-Null
         Write-Host "Disconnecting Microsoft 365 - PnP Online" -ForegroundColor Yellow
         Start-Sleep -Seconds 2
         Disconnect-PnPOnline
-    }
-    catch {
+    } catch {
         Write-Host "Connecting to Microsoft 365 - PnP Online" -ForegroundColor Yellow
         Write-Host "Enter Organisation Name (First part of xxxx.onmicrosoft.com)"
         $OrgName = Read-Host "Name"
         $ClientID = Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP-MS365-PSToolkit-$((Get-Date -format yyyyMMddhhmm).ToString())" -Tenant "$OrgName.onmicrosoft.com" -Interactive -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
         Connect-PnPOnline -url "$OrgName.sharepoint.com" -Interactive -ClientId $clientID."AzureAppId/ClientId"
+
     }
-    
 }
 function SharePointOnlineListSites {
     $ListSharePointSites = Get-PnPTenantSite | Format-Table url,status,archivestatus -autosize
