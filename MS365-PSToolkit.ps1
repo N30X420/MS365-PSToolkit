@@ -42,7 +42,10 @@ function Show-MainMenu {
 function CheckPowershellVersion {
     try {
         if ($PSVersionTable.PSVersion.Major -ne 7) {
-            throw "This program requires PowerShell 7. You are running version $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor). Please update to PowerShell 7.x"
+            throw "This program requires PowerShell 7.x You are running version $($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor). Please update to PowerShell 7.x"
+        }
+        else {
+            Write-Host "Running Powershell v$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor).$($PSVersionTable.PSVersion.Patch)" -ForegroundColor Green
         }
     } catch {
         Write-ErrorLog $_.Exception.Message
