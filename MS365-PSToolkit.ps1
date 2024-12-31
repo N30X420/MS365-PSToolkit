@@ -3,9 +3,9 @@
 #--------------------------------------
 $version = "2.2.1"
 $ProgramName = "MS365-PSToolkit"
-$tempdir = "C:\INSTALL\$ProgramName-$version"
+$programdir = "C:\MATRIXNET\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
-$ErrorLog = "$tempdir\error.log"
+$ErrorLog = "$programdir\error.log"
 #######################################
 #######################################
 $error.clear()
@@ -354,7 +354,7 @@ function CreateMFAStatusReport {
         $LogDate = Get-Date -f yyyyMMddhhmm
 
         # Define CSV file export location variable
-        $Csvfile = "$tempdir\MFAUsers_$LogDate.csv"
+        $Csvfile = "$programdir\MFAUsers_$LogDate.csv"
 
         # Get all Microsoft Entra ID users using the Microsoft Graph Beta API
         $users = Get-MgBetaUser -All
@@ -545,7 +545,7 @@ function ExchangeOnlineListMailbox {
     if ($script:ExportCSV -eq 1){
         $ExportResult=""   
         $ExportResults=@()  
-        $OutputCSV="$tempdir\Office365EmailAddressesReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
+        $OutputCSV="$programdir\Office365EmailAddressesReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
         # Initialize progress counter
         $Counter = 0
         $totalmailboxes = $ListMailbox.Count
@@ -595,7 +595,7 @@ function ExchangeOnlineListPermissions {
     Start-Sleep -Seconds 3
     PromptExportToCSV
     if ($script:ExportCSV -eq 1){
-        $ExportCSV="$tempdir\SharedMBPermissionReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
+        $ExportCSV="$programdir\SharedMBPermissionReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv"
         $Result=""
         $Results=@()
         $Counter = 0
@@ -682,7 +682,7 @@ function ExchangeOnlineListPermissionsByUser {
 
 }
 function ExchangeOnlineListMailboxSize {
-    $OutputCSV="$tempdir\MailboxSizeReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv" 
+    $OutputCSV="$programdir\MailboxSizeReport_$((Get-Date -format yyyy-MM-dd-hh-mm).ToString()).csv" 
     $Result=""   
     $Results=@()  
     $MBCounter=0
@@ -857,7 +857,7 @@ Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
 ######################
 CheckPowershellVersion
 CheckAdminPrivs
-if (!(Test-Path $tempdir)) {New-Item -itemType Directory -Path $tempdir | Out-Null}
+if (!(Test-Path $programdir)) {New-Item -itemType Directory -Path $programdir | Out-Null}
 CheckForUpdates
 Get-MgApplication -ErrorAction SilentlyContinue | Out-Null
 ######################
