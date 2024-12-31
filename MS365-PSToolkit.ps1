@@ -13,7 +13,21 @@ $ProgressPreference = 'Continue'
 $host.UI.RawUI.WindowTitle = "$ProgramName - Version $version"
 [console]::WindowWidth=200; [console]::WindowHeight=50; [console]::BufferWidth=[console]::WindowWidth
 #######################################
-
+function SplashLogo {
+    write-host ""
+    write-host "███╗   ███╗ █████╗ ████████╗██████╗ ██╗██╗  ██╗" -ForegroundColor White -NoNewline
+    Write-host "███╗   ██╗███████╗████████╗" -ForegroundColor Red
+    write-host "████╗ ████║██╔══██╗╚══██╔══╝██╔══██╗██║╚██╗██╔╝" -ForegroundColor white -NoNewline
+    Write-Host "████╗  ██║██╔════╝╚══██╔══╝" -ForegroundColor Red
+    write-host "██╔████╔██║███████║   ██║   ██████╔╝██║ ╚███╔╝ " -ForegroundColor White -NoNewline
+    Write-Host "██╔██╗ ██║█████╗     ██║   " -ForegroundColor Red
+    write-host "██║╚██╔╝██║██╔══██║   ██║   ██╔══██╗██║ ██╔██╗ " -ForegroundColor White -NoNewline
+    Write-Host "██║╚██╗██║██╔══╝     ██║   " -ForegroundColor Red
+    write-host "██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║██║██╔╝ ██╗" -ForegroundColor White -NoNewline
+    write-host "██║ ╚████║███████╗   ██║   " -ForegroundColor Red
+    write-host "╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝" -ForegroundColor White -NoNewline
+    write-host "╚═╝  ╚═══╝╚══════╝   ╚═╝   " -ForegroundColor Red                                         
+}
 function Logo {
     Write-Host " "
     Write-Host "  __  __ ___ ____  __ ___     ___  ___ _____         _ _   _ _   " -ForegroundColor Blue
@@ -827,6 +841,10 @@ function SharePointOnlineListSites {
 #####################################################################
 # Main Code --- Main Code --- Main Code --- Main Code --- Main Code #
 #-------------------------------------------------------------------#
+SplashLogo
+Start-Sleep -Seconds 3
+Clear-Host
+start-sleep -Milliseconds 250
 Logo
 Start-Sleep -Seconds 1
 Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
