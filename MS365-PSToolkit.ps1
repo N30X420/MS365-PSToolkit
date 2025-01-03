@@ -419,7 +419,7 @@ function Show-MsGraphMenu {
     Write-Host "(2) - Check required permission scopes for MsGraph Command"
     Write-Host "(3) - Report - Create MFA status report (CSV Export)"
     Write-Host "(4) - Report - Create license usage report (CSV Export)"
-    Write-Host "(5) - "
+    Write-Host "(5) - Show users with and without licenses"
     Write-Host "(8) - Tools Menu"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
@@ -785,6 +785,23 @@ function MsGraphCreate365LicenseReport {
     PromptPressKeyToContinue
 }
 
+function MsGraphShowUsersWithAndWithoutLicense {
+    if (Get-MgContext) {
+        Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
+        Disconnect-MgGraph | Out-Null
+    }
+
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+
+    Connect-MgGraph -Scopes "Directory.ReadWrite.All" -NoWelcome
+
+    Write-Host "Users with Licenses" -ForegroundColor Yellow
+    Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -ne 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled' | Format-Table -AutoSize
+    Write-Host "Users without Licenses" -ForegroundColor Yellow
+    Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -eq 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled' | Format-Table -AutoSize
+    PromptPressKeyToContinue
+}
 ####################################
 
 ####################################
@@ -1210,7 +1227,7 @@ while ($WhileLoopVarMainMenu -eq 1){
                     52 {try {MsGraphCreate365LicenseReport}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
-                    53 {try {}
+                    53 {try {MsGraphShowUsersWithAndWithoutLicense}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
                     55 {}
