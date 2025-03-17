@@ -427,6 +427,7 @@ function Show-MsGraphMenu {
     Write-Host "(3) - Report - Create MFA status report (CSV Export)"
     Write-Host "(4) - Report - Create license usage report (CSV Export)"
     Write-Host "(5) - Show users with and without licenses"
+    Write-Host "(6) - Show disabled accounts"
     Write-Host "(8) - Tools Menu"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
@@ -804,9 +805,64 @@ function MsGraphShowUsersWithAndWithoutLicense {
     Connect-MgGraph -Scopes "Directory.ReadWrite.All" -NoWelcome
 
     Write-Host "Users with Licenses" -ForegroundColor Yellow
-    Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -ne 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled' | Format-Table -AutoSize
+    $users = Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -ne 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled'
+    $userDetails = @()
+
+    $counter = 0
+    $totalUsers = $users.Count
+
+    foreach ($user in $users) {
+        $licenseDetails = Get-MgUserLicenseDetail -UserId $user.UserPrincipalName
+
+        $counter++
+        $percentComplete = [math]::Round(($counter / $TotalUsers) * 100)
+        $progressParams = @{
+            Activity        = "Retrieving license info"
+            Status          = "License $($counter) of $TotalUsers - Currently Processing: $user.UserPrincipalName - $percentComplete% Complete"
+            PercentComplete = $percentComplete
+        }
+        Write-Progress @progressParams
+
+        $licensesArray = @()
+        $licenseDetails.SkuPartNumber | ForEach-Object {
+            $EasyName = $LicenseFriendlyNameList[$_]
+            if (!($EasyName))
+                { $licensesArray += $_}
+            else
+                { $licensesArray += $EasyName}
+        }
+        $licenses = $licensesArray -join ", "
+
+        $userDetails += [PSCustomObject]@{
+            DisplayName       = $user.DisplayName
+            UserPrincipalName = $user.UserPrincipalName
+            AccountEnabled    = $user.AccountEnabled
+            License           = $licenses
+        }
+    }
+
+    $userDetails | Format-Table -AutoSize
+
     Write-Host "Users without Licenses" -ForegroundColor Yellow
     Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -eq 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled' | Format-Table -AutoSize
+
+    PromptPressKeyToContinue
+}
+
+function MsGraphShowDisabledAccounts {
+    if (Get-MgContext) {
+        Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
+        Disconnect-MgGraph | Out-Null
+    }
+
+    Write-Host "`nA new browser window will open for you to sign in using your Microsoft 365 Global Admin Account" -ForegroundColor Yellow
+    Start-Sleep -Seconds 2
+
+    Connect-MgGraph -Scopes "Directory.ReadWrite.All" -NoWelcome
+    
+    Write-Host "Disabled Accounts" -ForegroundColor Yellow
+    Get-MgBetaUser -All | Where-Object {($_.AccountEnabled) -match "False" } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled'
+    
     PromptPressKeyToContinue
 }
 ####################################
@@ -1235,6 +1291,9 @@ while ($WhileLoopVarMainMenu -eq 1){
                         catch {Write-Error "Error Running Script"
                             CatchError}}
                     53 {try {MsGraphShowUsersWithAndWithoutLicense}
+                        catch {Write-Error "Error Running Script"
+                            CatchError}}
+                    54 {try {MsGraphShowDisabledAccounts}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
                     55 {}
