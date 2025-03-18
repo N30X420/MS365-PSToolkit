@@ -818,7 +818,7 @@ function MsGraphShowUsersWithAndWithoutLicense {
         $percentComplete = [math]::Round(($counter / $TotalUsers) * 100)
         $progressParams = @{
             Activity        = "Retrieving license info"
-            Status          = "License $($counter) of $TotalUsers - Currently Processing: $user.UserPrincipalName - $percentComplete% Complete"
+            Status          = "License $($counter) of $TotalUsers - Currently Processing: $($user.UserPrincipalName) - $percentComplete% Complete"
             PercentComplete = $percentComplete
         }
         Write-Progress @progressParams
@@ -845,7 +845,8 @@ function MsGraphShowUsersWithAndWithoutLicense {
 
     Write-Host "Users without Licenses" -ForegroundColor Yellow
     Get-MgBetaUser -All | Where-Object {($_.AssignedLicenses.Count) -eq 0 } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled' | Format-Table -AutoSize
-
+    Write-Progress -Activity "Retrieving license info" -Completed
+    Disconnect-MgGraph | Out-Null
     PromptPressKeyToContinue
 }
 
@@ -862,7 +863,7 @@ function MsGraphShowDisabledAccounts {
     
     Write-Host "Disabled Accounts" -ForegroundColor Yellow
     Get-MgBetaUser -All | Where-Object {($_.AccountEnabled) -match "False" } | Select-Object 'DisplayName', 'UserPrincipalName', 'AccountEnabled'
-    
+    Disconnect-MgGraph | Out-Null
     PromptPressKeyToContinue
 }
 ####################################
@@ -1189,7 +1190,7 @@ function Show-SharePointOnlineMenu {
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Sharepoint Online"
     Write-Host "(3) - List SharePoint Sites"
-    Write-Host "(8) - Custom Command - Coming Soon" -ForegroundColor Red
+    Write-Host "(8) - Custom Command"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
     Write-Host ""
@@ -1228,6 +1229,24 @@ function SharePointOnlineListSites {
     Write-Output $ListSharePointSites
     Write-Host "####################################################" -ForegroundColor Green
     PromptPressKeyToContinue
+}
+function SharePointOnlineCustomCmd {
+    $whileLoopVarCustomCmd = 1
+    Clear-Host
+    Start-Sleep -Milliseconds 250
+    Logo
+    while ($whileLoopVarCustomCmd -eq 1) {
+        write-host ""
+        Write-Host "SharePoint Online Shell >>> " -NoNewline -ForegroundColor Yellow
+        $SharePointOnlineCustomCmd = Read-Host
+        if ($SharePointOnlineCustomCmd -eq "exit"){
+            $whileLoopVarCustomCmd = 0
+        }
+        else {
+            Invoke-Expression $SharePointOnlineCustomCmd
+            Write-Host ""
+        }       
+    }    
 }
 
 ####################################
@@ -1441,7 +1460,7 @@ while ($WhileLoopVarMainMenu -eq 1){
                     53 {try {}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
-                    56 {}
+                    56 {SharePointOnlineCustomCmd}
                     57 {
                         Write-Host "`nReturning to Main Menu" -ForegroundColor Cyan
                         $WhileLoopVarSharepointMenu = 0}
