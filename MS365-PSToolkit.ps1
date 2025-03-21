@@ -296,6 +296,7 @@ function Show-MainMenu {
     Write-Host "`n(1) - Microsoft Graph"
     Write-Host "(2) - Exchange Online"
     Write-Host "(3) - Sharepoint Online"
+    Write-Host "(7) - Test"
     Write-Host "`n(8) - Check For Updates"
     Write-Host "(9) - Exit"
     Write-Host "###############################################" -ForegroundColor DarkCyan
@@ -417,6 +418,21 @@ function DisplayBug {
     Write-Warning "If no data is displayed rerun the command. CSV export does work even when no data is displayed."
 }
 
+function installPwsh7 {
+    try {
+        if(-not (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe")){
+            Write-Warning "Powershell 7 not installed"
+            Write-Host "Installing Powershell 7 Please Wait" -ForegroundColor Green
+            winget install --id Microsoft.PowerShell --source winget --force
+            }
+    }
+    catch {
+        Write-ErrorLog $_.Exception.Message
+        Write-Error $_.Exception.Message
+        Start-Sleep -Seconds 3
+        exit
+    }
+}
 ####################################
 #  MsGraph  #
 #-------------
@@ -453,8 +469,7 @@ function installMicrosoftGraphModule {
     if(-not (Get-Module Microsoft.Graph -ListAvailable)){
         Write-Warning "Module Microsoft.Graph not installed"
         Write-Host "Installing Microsoft.Graph Please Wait" -ForegroundColor Green
-        Install-Module Microsoft.Graph -Scope CurrentUser -Force
-        Install-Module Microsoft.Graph.Beta -Scope CurrentUser -Force -Confirm:$false
+        start-process -Wait "C:\Program Files\PowerShell\7\pwsh.exe" "-command install-module microsoft.graph -force && install-module microsoft.graph.beta -force"
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Already Installed" -ForegroundColor Green
@@ -901,7 +916,7 @@ function installExchangeOnlineModule {
     if(-not (Get-Module ExchangeOnlineManagement -ListAvailable)){
         Write-Warning "Module ExchangeOnlineManagement not installed"
         Write-Host "Installing ExchangeOnlineManagement Please Wait" -ForegroundColor Green
-        Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -Confirm:$false
+        start-process -Wait "C:\Program Files\PowerShell\7\pwsh.exe" "-command install-module ExchangeOnlineManagement -force"
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Already Installed" -ForegroundColor Green
@@ -1200,7 +1215,7 @@ function installSharepointOnlineModule {
     if(-not (Get-Module PnP.PowerShell -ListAvailable)){
         Write-Warning "PnP.PowerShell not installed"
         Write-Host "PnP.PowerShell Please Wait" -ForegroundColor Green
-        Install-Module PnP.PowerShell -Scope CurrentUser -Force -Confirm:$false
+        start-process -Wait "C:\Program Files\PowerShell\7\pwsh.exe" "-command install-module PnP.PowerShell -force"
         }
     Start-Sleep -Seconds 1
     Write-Host "Module Already Installed" -ForegroundColor Green
@@ -1269,8 +1284,9 @@ Set-ExecutionPolicy Bypass -Force -Scope Process -Confirm:$false
 # Requirements Check #
 ######################
 if (!(Test-Path $programdir)) {New-Item -itemType Directory -Path $programdir | Out-Null}
-CheckPowershellVersion
 CheckAdminPrivs
+installPwsh7
+CheckPowershellVersion
 CheckForUpdates
 Get-MgApplication -ErrorAction SilentlyContinue | Out-Null
 ######################
@@ -1470,6 +1486,7 @@ while ($WhileLoopVarMainMenu -eq 1){
                 }
             }
         }
+        55 {test}
         56 {CheckForUpdates}
         57 {
             Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
