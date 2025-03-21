@@ -1,7 +1,7 @@
 #######################################
 # Configurable Variables
 #--------------------------------------
-$version = "2.3.0"
+$version = "2.3.1"
 $ProgramName = "MS365-PSToolkit"
 $programdir = "C:\MATRIXNET\$ProgramName-$version"
 $GithubRepo = "https://github.com/N30X420/MS365-PSToolkit"
@@ -296,7 +296,6 @@ function Show-MainMenu {
     Write-Host "`n(1) - Microsoft Graph"
     Write-Host "(2) - Exchange Online"
     Write-Host "(3) - Sharepoint Online"
-    Write-Host "(7) - Test"
     Write-Host "`n(8) - Check For Updates"
     Write-Host "(9) - Exit"
     Write-Host "###############################################" -ForegroundColor DarkCyan
@@ -417,7 +416,6 @@ function PromptPressKeyToContinue {
 function DisplayBug {
     Write-Warning "If no data is displayed rerun the command. CSV export does work even when no data is displayed."
 }
-
 function installPwsh7 {
     try {
         if(-not (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe")){
@@ -464,7 +462,6 @@ function Show-MsGraphToolsMenu {
     Write-Host "####################################################" -ForegroundColor DarkCyan
     Write-Host ""
 }
-
 function installMicrosoftGraphModule {
     if(-not (Get-Module Microsoft.Graph -ListAvailable)){
         Write-Warning "Module Microsoft.Graph not installed"
@@ -753,7 +750,6 @@ function MsGraphCreateMFAStatusReport {
         Write-Error $_.Exception.Message
     }
 }
-
 function MsGraphCreate365LicenseReport {
     if (Get-MgContext) {
         Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
@@ -807,7 +803,6 @@ function MsGraphCreate365LicenseReport {
     Disconnect-MgGraph | Out-Null
     PromptPressKeyToContinue
 }
-
 function MsGraphShowUsersWithAndWithoutLicense {
     if (Get-MgContext) {
         Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
@@ -864,7 +859,6 @@ function MsGraphShowUsersWithAndWithoutLicense {
     Disconnect-MgGraph | Out-Null
     PromptPressKeyToContinue
 }
-
 function MsGraphShowDisabledAccounts {
     if (Get-MgContext) {
         Write-Host Disconnecting from the previous session.... -ForegroundColor Yellow
@@ -1205,6 +1199,7 @@ function Show-SharePointOnlineMenu {
     Write-Host "`n(1) - Install Required Modules"
     Write-Host "(2) - Connect / Disconnect Sharepoint Online"
     Write-Host "(3) - List SharePoint Sites"
+    Write-Host "(4) - List SharePoint Sites Size"
     Write-Host "(8) - Custom Command"
     Write-Host "`n(9) - Main Menu"
     Write-Host "################################################" -ForegroundColor DarkCyan
@@ -1228,12 +1223,20 @@ function SharePointOnlineConnection {
         Start-Sleep -Seconds 2
         Disconnect-PnPOnline
     } catch {
-        Write-Host "Connecting to Microsoft 365 - PnP Online" -ForegroundColor Yellow
-        Write-Host "Enter Organisation Name (First part of xxxx.onmicrosoft.com)"
-        $OrgName = Read-Host "Name"
-        $ClientID = Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP-MS365-PSToolkit-$((Get-Date -format yyyyMMddhhmm).ToString())" -Tenant "$OrgName.onmicrosoft.com" -Interactive -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-        Connect-PnPOnline -url "$OrgName.sharepoint.com" -Interactive -ClientId $clientID."AzureAppId/ClientId"
-
+        try {
+            Write-Host "Connecting to Microsoft 365 - PnP Online" -ForegroundColor Yellow
+            Write-Host "Enter Organisation Name (First part of xxxx.onmicrosoft.com)"
+            $OrgName = Read-Host "Name"
+            $ClientID = Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "PnP-MS365-PSToolkit-$((Get-Date -format yyyyMMddhhmm).ToString())" -Tenant "$OrgName.onmicrosoft.com" -Interactive -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+            Pause
+            Connect-PnPOnline -url "$OrgName.sharepoint.com" -Interactive -ClientId $clientID."AzureAppId/ClientId"
+            Pause
+        }
+        catch {
+            Write-ErrorLog $_.Exception.Message
+            write-Error $_.Exception.Message
+            start-sleep -Seconds 3
+        }
     }
 }
 function SharePointOnlineListSites {
@@ -1244,6 +1247,44 @@ function SharePointOnlineListSites {
     Write-Output $ListSharePointSites
     Write-Host "####################################################" -ForegroundColor Green
     PromptPressKeyToContinue
+}
+function SharePointOnlineListSitesSizes {
+    Try {
+        $Sites = Get-PnPTenantSite  -Detailed | Select-Object *
+        $SiteUsageData = @()
+        ForEach ($Site in $Sites)
+        {
+            $SiteUsageData += New-Object PSObject -Property ([ordered]@{               
+                    'Title'                    = $Site.Title
+                    'URL'                      = $Site.Url
+                    'Description'              = $Site.Description                    
+                    'Owner'                    = $Site.OwnerName
+                    'Storage Quota'            = $Site.StorageQuota
+                    'Storage MaximumLevel'     = $Site.StorageMaximumLevel 
+                    'Storage Usage Current'    = $Site.StorageUsageCurrent
+                    'Resource Quota'           = $Site.ResourceQuota
+                    'Resource Quota Warning'   = $Site.ResourceQuotaWarningLevel
+                    'Resource Usage Average'   = $Site.ResourceUsageAverage
+                    'Resource Usage Current'   = $Site.ResourceUsageCurrent
+                    'Template'                 = $Site.Template
+                    'Sharing Capability'       = $Site.SharingCapability
+                    'Lock Status'              = $Site.LockState
+                    'Last Modified Date'       = $Site.LastContentModifiedDate
+                    'Subsites Count'           = $Site.WebsCount
+                })
+        }
+        $SiteUsageData
+        PromptExportToCSV
+        if ($script:ExportCSV -eq 1){
+            $CSVPath = "$programdir\SharePointSiteUsageReport_$((Get-Date -format yyyy-MM-dd-HH-mm).ToString()).csv"
+            $SiteUsageData | Export-Csv $CSVPath -NoTypeInformation
+            Write-Host "Site Usage Report Generated Successfully! - $CSVPath" -ForegroundColor Green
+        }
+    }
+    Catch {
+        Write-error "Error generating site usage report:" $_.Exception.Message
+        Write-ErrorLog $_.Exception.Message
+    }
 }
 function SharePointOnlineCustomCmd {
     $whileLoopVarCustomCmd = 1
@@ -1470,7 +1511,7 @@ while ($WhileLoopVarMainMenu -eq 1){
                     51 {try {SharePointOnlineListSites}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
-                    52 {try {}
+                    52 {try {SharePointOnlineListSitesSizes}
                         catch {Write-Error "Error Running Script"
                             CatchError}}
                     53 {try {}
@@ -1486,7 +1527,6 @@ while ($WhileLoopVarMainMenu -eq 1){
                 }
             }
         }
-        55 {test}
         56 {CheckForUpdates}
         57 {
             Write-Host "`nExiting... Goodbye!" -ForegroundColor Cyan
